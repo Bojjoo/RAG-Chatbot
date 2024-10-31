@@ -255,6 +255,7 @@ def delete_file_admin(file: FileDeleteAdmin):
     except:
         return 0
 
+
 @router.delete("/delete_folder/")
 def delete_folder(folder: Folder):
     admin_department = folder.admin_department
@@ -269,3 +270,12 @@ def delete_folder(folder: Folder):
 @router.post('/add_prompt_template_admin/')
 async def add_prompt_template_admin(prompt_template: PromptTemplateAdmin):
     sql_conn.add_prompt_template_admin(prompt_template.title, prompt_template.prompt_text, prompt_template.admin_department)
+
+
+@router.post('/test_key/')
+async def test_key(apikey: APIKey):
+    try:
+        model_test = CheckAPIKey(apikey=apikey.apikey, type=apikey.type)
+        return 1
+    except:
+        return 0

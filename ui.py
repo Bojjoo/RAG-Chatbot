@@ -331,7 +331,7 @@ if st.session_state["authenticated"]:
                 chat_input_container = st.container()
                 with chat_input_container:
                     question = st.chat_input("What do you want to know?")
-                css_chat_input_container = float_css_helper(bottom="20px")
+                css_chat_input_container = float_css_helper(bottom="35px")
                 chat_input_container.float(css_chat_input_container)
                 
                 # Hiển thị lịch sử hội thoại của phiên đã chọn
@@ -431,14 +431,14 @@ if st.session_state["authenticated"]:
         # Chat with user's files
         def Chat_With_Files():
             # Định nghĩa prompt template
-            if "prompt_template" not in st.session_state:
-                st.session_state["prompt_template"] = " "
-            if "title_prompt_template" not in st.session_state:
-                st.session_state["title_prompt_template"] = "Normal QA"
+            if "prompt_template_user" not in st.session_state:
+                st.session_state["prompt_template_user"] = " "
+            if "title_prompt_template_user" not in st.session_state:
+                st.session_state["title_prompt_template_user"] = "Normal QA"
 
             with st.sidebar:
                 st.info(f"Nice to meet you: {st.session_state['user_name']}", icon=":material/sentiment_satisfied:")
-
+                st.session_state["conversations_user"] = sql_conn.get_conversation_session_user(st.session_state["user_id"])
                 st.header("UpLoad Your Documents", divider='orange')
                 uploaded_file = st.file_uploader("Choose a file", type=["pdf", "docx"])
 
@@ -511,7 +511,6 @@ if st.session_state["authenticated"]:
                         sql_conn.create_conversation(conversation_name, st.session_state["user_id"])
                         # # Lấy danh sách các phiên hội thoại
                         st.session_state["conversations_user"] = sql_conn.get_conversation_session_user(st.session_state["user_id"])
-
                         st.session_state["create_new_conversation"] = False
                         st.rerun()
                 
@@ -557,7 +556,7 @@ if st.session_state["authenticated"]:
                 chat_input_container = st.container()
                 with chat_input_container:
                     question = st.chat_input("What do you want to know?")
-                css = float_css_helper(bottom="20px")
+                css = float_css_helper(bottom="35px")
                 chat_input_container.float(css)
 
                 messages_container = st.container(height=850, border=False)
@@ -591,7 +590,7 @@ if st.session_state["authenticated"]:
                             with st.chat_message("assistant"):
                                 assistant_message = st.empty()
 
-                                prompt_template = st.session_state["prompt_template"]
+                                prompt_template = st.session_state["prompt_template_user"]
                                 response_stream = handler_input(
                                     question, st.session_state["selected_conversation_id"], st.session_state["user_id"],
                                     USER_URL, st.session_state.model, prompt_template, st.session_state["admin_department"])
@@ -626,29 +625,29 @@ if st.session_state["authenticated"]:
                     #     st.warning("Incorrect API key provided, please make sure your API key is correct!")
 
             with col3:
-                st.markdown(f'Prompt Template is using: {st.session_state["title_prompt_template"]}')
+                st.markdown(f'Prompt Template is using: {st.session_state["title_prompt_template_user"]}')
                 #st.markdown("System Prompt Template:")
                 col_1, col_2 = st.columns([3, 1.5])
                 with col_1:
-                    if st.session_state["title_prompt_template"] == "Normal QA":
+                    if st.session_state["title_prompt_template_user"] == "Normal QA":
                         with st.popover("Chat with document", use_container_width=True):
                             st.markdown(f"{PROMPT_TEMPLATE}")
-                    elif st.session_state["title_prompt_template"] == "Chat with document":
+                    elif st.session_state["title_prompt_template_user"] == "Chat with document":
                         with st.popover("Normal QA", use_container_width=True):
                             st.markdown(f" ")
                     # with st.popover("Normal Question Answer", use_container_width=True):
                     #     st.markdown(" ")
                 with col_2:
                     if st.button("Switch", key='switch_prompt_template'):
-                        if st.session_state["title_prompt_template"] == "Normal QA":
-                            st.session_state["prompt_template"] = PROMPT_TEMPLATE
-                            st.session_state["title_prompt_template"] = "Chat with document"
-                        elif st.session_state["title_prompt_template"] == "Chat with document":
-                            st.session_state["prompt_template"] = " "
-                            st.session_state["title_prompt_template"] = "Normal QA"
+                        if st.session_state["title_prompt_template_user"] == "Normal QA":
+                            st.session_state["prompt_template_user"] = PROMPT_TEMPLATE
+                            st.session_state["title_prompt_template_user"] = "Chat with document"
+                        elif st.session_state["title_prompt_template_user"] == "Chat with document":
+                            st.session_state["prompt_template_user"] = " "
+                            st.session_state["title_prompt_template_user"] = "Normal QA"
                     # if st.button("Use prompt", key='use_Normal_Question_Answer'):
-                    #     st.session_state["prompt_template"] = " "
-                    #     st.session_state["title_prompt_template"] = "Normal QA"
+                    #     st.session_state["prompt_template_user"] = " "
+                    #     st.session_state["title_prompt_template_user"] = "Normal QA"
                         st.rerun()
                 # st.markdown("Your Prompt Template:")
                 # with st.container(height=430, border=True):
@@ -660,8 +659,8 @@ if st.session_state["authenticated"]:
                 #                 st.markdown(f"{prompt_text}")
                 #         with col_b:
                 #             if st.button("Use prompt", key='use'+prompt_id):
-                #                 st.session_state["prompt_template"] = prompt_text
-                #                 st.session_state["title_prompt_template"] = title
+                #                 st.session_state["prompt_template_user"] = prompt_text
+                #                 st.session_state["title_prompt_template_user"] = title
                 #                 st.rerun()
                 #         with col_c:
                 #             if st.button(label="", icon=":material/delete:", key=prompt_id, use_container_width=True):
@@ -771,8 +770,8 @@ if st.session_state["authenticated"]:
 
         def API_Key():
             st.subheader("API Keys")
-            st.markdown("Your API Keys are stored locally on you computer and never sent anywhere else.")
             lst = [["./logo/gpt-4.webp", "openaikey"], ["./logo/gemini.png", "geminikey"]]
+            test_key_endpoint = os.getenv("TEST_KEY")
             col1, col2 = st.columns([6, 3])
             with col1:
                 for logo, name in lst:
@@ -787,27 +786,35 @@ if st.session_state["authenticated"]:
                     with col3:
                         if st.button(label="", icon=":material/send:", key="key"+name):
                             st.session_state["save_apikey"] = True
-                        if "save_apikey" in st.session_state and st.session_state["save_apikey"]:
+                        #if "save_apikey" in st.session_state and st.session_state["save_apikey"]:
                             if len(st.session_state[f"{name}"]) > 0:
-                                try:
-                                    sql_conn.add_api_key(st.session_state["admin_department"], name, st.session_state[f"{name}"])
-                                    st.session_state["get_apikey"] = True
-                                    if st.session_state["get_apikey"]:
-                                        apikey = get_apikey_for_admin(st.session_state["admin_department"])
-                                    st.session_state["get_apikey"] = False
-                                    st.success("Saved API key!")
-                                    time.sleep(1)
+                                data = {
+                                    "apikey": st.session_state[f"{name}"],
+                                    "type": name
+                                }
+                                response = requests.post(test_key_endpoint, json=data)
+                                if response.json() == 1:
+                                    try:
+                                        sql_conn.add_api_key(st.session_state["admin_department"], name, st.session_state[f"{name}"])
+                                        st.session_state["get_apikey"] = True
+                                        if st.session_state["get_apikey"]:
+                                            apikey = get_apikey_for_admin(st.session_state["admin_department"])
+                                        st.session_state["get_apikey"] = False
+                                        st.success("Saved API key!")
+                                        time.sleep(1)
 
-                                except:
-                                    sql_conn.change_api_key(st.session_state["admin_department"], name, st.session_state[f"{name}"])
-                                    st.session_state["get_apikey"] = True
-                                    if st.session_state["get_apikey"]:
-                                        apikey = get_apikey_for_admin(st.session_state["admin_department"])
-                                    st.session_state["get_apikey"] = False
-                                    st.success("Changed API key!")
-                                    time.sleep(1)
+                                    except:
+                                        sql_conn.change_api_key(st.session_state["admin_department"], name, st.session_state[f"{name}"])
+                                        st.session_state["get_apikey"] = True
+                                        if st.session_state["get_apikey"]:
+                                            apikey = get_apikey_for_admin(st.session_state["admin_department"])
+                                        st.session_state["get_apikey"] = False
+                                        st.success("Changed API key!")
+                                        time.sleep(1)
 
-                                st.session_state["save_apikey"] = False
+                                    st.session_state["save_apikey"] = False
+                                else:
+                                    st.warning("Incorrect API key provided, please make sure your API key is correct!")
                             else:
                                 st.session_state["save_apikey"] = False
                                 st.warning("API must not be empty!")
@@ -823,23 +830,31 @@ if st.session_state["authenticated"]:
                 with col3:
                     if st.button(label="", icon=":material/send:", key="send_openai_embedding_key"):
                         if len(st.session_state["openai_embedding_key"]) > 0:
-                            try:
-                                sql_conn.add_embedding_key(st.session_state["admin_department"], st.session_state["openai_embedding_key"])
-                                st.session_state["get_apikey"] = True
-                                if st.session_state["get_apikey"]:
-                                    apikey = get_apikey_for_admin(st.session_state["admin_department"])
-                                st.session_state["get_apikey"] = False
-                                st.success("Saved API key!")
-                                time.sleep(1)
+                            data = {
+                                "apikey": st.session_state["openai_embedding_key"],
+                                "type": "openai_embedding_key"
+                            }
+                            response = requests.post(test_key_endpoint, json=data)
+                            if response.json() == 1:
+                                try:
+                                    sql_conn.add_embedding_key(st.session_state["admin_department"], st.session_state["openai_embedding_key"])
+                                    st.session_state["get_apikey"] = True
+                                    if st.session_state["get_apikey"]:
+                                        apikey = get_apikey_for_admin(st.session_state["admin_department"])
+                                    st.session_state["get_apikey"] = False
+                                    st.success("Saved API key!")
+                                    time.sleep(1)
 
-                            except:
-                                sql_conn.change_api_key(st.session_state["admin_department"], 'openai-embedding', st.session_state["openai_embedding_key"])
-                                st.session_state["get_apikey"] = True
-                                if st.session_state["get_apikey"]:
-                                    apikey = get_apikey_for_admin(st.session_state["admin_department"])
-                                st.session_state["get_apikey"] = False
-                                st.success("Changed API key!")
-                                time.sleep(1)
+                                except:
+                                    sql_conn.change_api_key(st.session_state["admin_department"], 'openai-embedding', st.session_state["openai_embedding_key"])
+                                    st.session_state["get_apikey"] = True
+                                    if st.session_state["get_apikey"]:
+                                        apikey = get_apikey_for_admin(st.session_state["admin_department"])
+                                    st.session_state["get_apikey"] = False
+                                    st.success("Changed API key!")
+                                    time.sleep(1)
+                            else:
+                                st.warning("Incorrect API key provided, please make sure your API key is correct!")
                         else:
                             st.warning("API must not be empty!")
 

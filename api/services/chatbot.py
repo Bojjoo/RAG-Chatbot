@@ -58,6 +58,7 @@ class ChatBot:
         return prompt
 
     def prompt_folder(self, question, context, history, prompt_template):
+        prompt_template = prompt_template.replace("{", "{{").replace("}", "}}")
         llm_prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", prompt_template),
@@ -141,5 +142,16 @@ class ChatBot:
         rename_pt = rename_conversation_prompt.format(chat_history=history)
         new_name = self.model_reformulate_question.invoke(rename_pt)
         return new_name.content
+
+
+class CheckAPIKey:
+    def __init__(self, apikey, type):
+        if type == "openaikey" or type == "openai-embedding":
+            self.model = ChatOpenAI(model="gpt-4o-mini", api_key=apikey)
+            self.model.invoke("hello")
+        elif type == "geminikey":
+            self.model = ChatGoogleGenerativeAI(model="gemini-1.5-flash", api_key=apikey)
+            self.model.invoke("hello")
+
 
 

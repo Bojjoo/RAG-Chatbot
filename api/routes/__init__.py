@@ -1,4 +1,4 @@
-from api.services.chatbot import ChatBot
+from api.services.chatbot import ChatBot, CheckAPIKey
 from api.services.vectorstore_faiss import VectorStore, VectorStoreAdmin
 from fastapi import UploadFile, File, Form, APIRouter
 from pydantic import BaseModel
@@ -104,16 +104,23 @@ class SignInAdminAccount(BaseModel):
 class AdminID(BaseModel):
     admin_department: str
 
+
 class AdminRetriever(BaseModel):
     admin_department: str
     folder_id: str
+
 
 class FileDeleteAdmin(BaseModel):
     file_name: str
     admin_department: str
     folder_id: str
 
+
 class Folder(BaseModel):
     folder_id: str
     admin_department: str
 
+
+class APIKey(BaseModel):
+    apikey: str
+    type: str
