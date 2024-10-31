@@ -1,0 +1,5 @@
+# Sử dụng image Nginx làm base
+FROM nginx:latest
+
+# Sao chép file cấu hình Nginx vào thư mục cấu hình của Nginx trong container
+COPY ./nginx.conf /etc/nginx/conf.d/default.conf
