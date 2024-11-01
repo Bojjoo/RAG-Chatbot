@@ -249,7 +249,6 @@ if not st.session_state["authenticated"]:
                 st.warning("Invalid username or password. Please try again.")
 
 
-#st.rerun()
 # Nếu người dùng đã đăng nhập thành công, hiển thị giao diện chat
 if st.session_state["authenticated"]:
     if st.session_state["User_login"] == True and st.session_state["Admin_login"] == False:
@@ -313,7 +312,7 @@ if st.session_state["authenticated"]:
             with col1:
                 option = st.selectbox(
                     label="Model:",
-                    options=("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "Leme-3hehe"
+                    options=("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"
                              , "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro", "gemini-1.5-flash-002"
                              , "gemini-1.5-pro-002", "gemini-1.5-flash-8b"),
                     index=None,
@@ -335,7 +334,7 @@ if st.session_state["authenticated"]:
                 chat_input_container.float(css_chat_input_container)
                 
                 # Hiển thị lịch sử hội thoại của phiên đã chọn
-                messages_container = st.container(height=850, border=False)
+                messages_container = st.container(height=800, border=False)
                 with messages_container:
                     if "messages" not in st.session_state:
                         st.session_state.messages = []
@@ -395,8 +394,7 @@ if st.session_state["authenticated"]:
                                 st.rerun()
                     else:
                         st.warning("Please select a conversation first!")
-                    # except:
-                    #     st.warning("Incorrect API key provided, please make sure your API key is correct!")
+
             with col3:
                 st.markdown(f'Prompt Template is using: {st.session_state["title_prompt_template"]}')
                 col_1, col_2 = st.columns([3, 1.5])
@@ -538,7 +536,7 @@ if st.session_state["authenticated"]:
             with col1:
                 option = st.selectbox(
                     label="Model:",
-                    options=("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "Leme-3hehe"
+                    options=("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"
                             , "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro", "gemini-1.5-flash-002"
                             , "gemini-1.5-pro-002", "gemini-1.5-flash-8b"),
                     index=None,
@@ -559,7 +557,7 @@ if st.session_state["authenticated"]:
                 css = float_css_helper(bottom="35px")
                 chat_input_container.float(css)
 
-                messages_container = st.container(height=850, border=False)
+                messages_container = st.container(height=800, border=False)
                 with messages_container:
                 # Hiển thị lịch sử hội thoại của phiên đã chọn
                     if "messages" not in st.session_state:
@@ -621,8 +619,6 @@ if st.session_state["authenticated"]:
                                 st.rerun()
                     else:
                         st.warning("Please select a conversation first!")
-                    # except:
-                    #     st.warning("Incorrect API key provided, please make sure your API key is correct!")
 
             with col3:
                 st.markdown(f'Prompt Template is using: {st.session_state["title_prompt_template_user"]}')

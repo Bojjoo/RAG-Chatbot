@@ -43,7 +43,7 @@ async def add_prompt_template(prompt_template: PromptTemplate):
 
 @router.post('/get_answer_about_users_data/')
 async def get_response(question_request: QuestionRequest):
-    # try:
+    try:
         # With openai model
         if question_request.model in model_openai:
             apikey = apikeys_cache[f"{question_request.admin_department}"]["openaikey"]
@@ -70,13 +70,13 @@ async def get_response(question_request: QuestionRequest):
 
             return StreamingResponse(generator, media_type="text/event-stream")
 
-    # except:
-    #     return {"Error"}
+    except:
+        return {"Error"}
 
 
 @router.post('/get_answer_about_system_data/')
 async def get_response(question_request: QuestionRequestSystem):
-    # try:
+    try:
         # With openai model
         if question_request.model in model_openai:
             apikey = apikeys_cache[f"{question_request.admin_department}"]["openaikey"]
@@ -103,8 +103,8 @@ async def get_response(question_request: QuestionRequestSystem):
 
             return StreamingResponse(generator, media_type="text/event-stream")
 
-    # except:
-    #     return {"Error"}
+    except:
+        return {"Error"}
 
 @router.post('/upload_CSV_file/')
 async def csv_file_handler(file: UploadFile = File(...), user_id: str = Form(...), admin_department: str = Form(...)):
@@ -230,10 +230,6 @@ async def upload_file_admin(file: UploadFile = File(...), admin_department: str 
     chunks = vectorstore.upload_file(file, admin_department, folder_id)
 
     new_vectorstore = VectorStoreAdmin(admin_department, folder_id, openai_embedding_key=openai_embedding_apikey_cache[f"{admin_department}"])
-
-    # retriever_cache_admin[f'{admin_department}'].update(dict([(folder_id, new_vectorstore.admin_retriever)]))
-    # vectorstore_cache_admin[f'{admin_department}'].update(dict([(folder_id, new_vectorstore.admin_db)]))
-    # bm25_retriever_cache_admin[f'{admin_department}'].update(dict([(folder_id, new_vectorstore.admin_bm25_retriever)]))
 
     return chunks
 
