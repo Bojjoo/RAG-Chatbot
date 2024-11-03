@@ -106,6 +106,7 @@ async def get_response(question_request: QuestionRequestSystem):
     except:
         return {"Error"}
 
+
 @router.post('/upload_CSV_file/')
 async def csv_file_handler(file: UploadFile = File(...), user_id: str = Form(...), admin_department: str = Form(...)):
     file_formats = {
@@ -121,17 +122,30 @@ async def csv_file_handler(file: UploadFile = File(...), user_id: str = Form(...
         ext = file.filename.split(".")[-1]
     if ext in file_formats:
         df = file_formats[ext](file.file)
+        # Nếu trước đó đã up file lên rồi
         try:
-            #dataframe_cache[f"{user_id}"]:
+            df.name = file.filename
             dataframe_cache[f"{user_id}"].append(df)
             df = dataframe_cache[f"{user_id}"]
             agent_cache[f"{user_id}"] = CSVAgent(api_key=apikeys_cache[f"{admin_department}"]["openaikey"], df=df)
+
+        # nếu chưa từng up file lên
         except:
+            df.name = file.filename
             dataframe_cache[f'{user_id}'] = [df]
             agent_cache[f"{user_id}"] = CSVAgent(api_key=apikeys_cache[f"{admin_department}"]["openaikey"], df=df)
-        return "Saved dataframe successfully!"
+
+        return [df.name for df in dataframe_cache[f"{user_id}"]]
     else:
         return f"Unsupported file format: {ext}"
+
+
+@router.delete('/delete_csv_file/')
+async def delete_csv_file(file: CSVFile):
+    dataframe_cache[f"{file.user_id}"] = [i for i in dataframe_cache[f"{file.user_id}"] if i.name != file.file_name]
+    agent_cache[f"{file.user_id}"] = CSVAgent(api_key=apikeys_cache[f"{file.admin_department}"]["openaikey"],
+                                              df=dataframe_cache[f"{file.user_id}"])
+    return [df.name for df in dataframe_cache[f"{file.user_id}"]]
 
 
 @router.post('/get_answer_about_csv_file/')

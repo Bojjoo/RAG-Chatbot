@@ -65,12 +65,13 @@ class VectorStore:
     # upload file và lưu vào vectorstore faiss, lưu file vào folder của conversation_id
     def upload_file(self, file: UploadFile = File(...), user_id: str = Form(...)):
         name = file.filename
+        type="text_file"
         if name.endswith('.pdf') or name.endswith('docx'):
             # Lấy ra file size
             file.file.seek(0, os.SEEK_END)
             file_size = round(file.file.tell() / (1024 * 1024), 2)
             file.file.seek(0)
-            result = sql_conn.save_file_detail(file.filename, file_size, user_id)
+            result = sql_conn.save_file_detail(file.filename, file_size, user_id, type)
             # Nếu result =1: thỏa mãn yêu cầu về total_size <50 và file_size <20
             if result == 1:
                 # Lưu file vào folder

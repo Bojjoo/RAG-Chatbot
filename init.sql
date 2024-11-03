@@ -17,6 +17,7 @@ CREATE TABLE conversations_user(
     conversation_id VARCHAR(20) primary key,
 	conversation_name varchar(30) not null,
     user_id VARCHAR(20) REFERENCES users(user_id),
+    type varchar(20) check (type in ('text_file','csv_file')) not null,
     start_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -34,6 +35,7 @@ CREATE TABLE files(
     file_name varchar(50) not null,
     size real not null,
     user_id VARCHAR(20) REFERENCES users(user_id),
+    type varchar(20) check (type in ('text_file','csv_file')) not null,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 

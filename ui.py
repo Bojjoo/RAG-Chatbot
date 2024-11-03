@@ -196,7 +196,8 @@ if not st.session_state["authenticated"]:
                     st.session_state["update_retriever"] = False
 
                     # Lấy danh sách các phiên hội thoại
-                    st.session_state["conversations_id_user"] = sql_conn.get_conversationid_user(st.session_state["user_id"])
+                    st.session_state["conversations_id_user_text"] = sql_conn.get_conversationid_user_textfile(st.session_state["user_id"])
+                    st.session_state["conversations_id_user_csv"] = sql_conn.get_conversationid_user_csvfile(st.session_state["user_id"])
                     st.session_state["conversations_id_system"] = sql_conn.get_conversationid_system(st.session_state["user_id"])
 
                     st.session_state["User_login"] = True
@@ -324,7 +325,7 @@ if st.session_state["authenticated"]:
 
             # Chat session
             with col2:
-                if "selected_conversation_id" in st.session_state and st.session_state["selected_conversation_id"] in [i[0] for i in st.session_state["conversations_id_user"]]:
+                if "selected_conversation_id" in st.session_state and st.session_state["selected_conversation_id"] not in [i[0] for i in st.session_state["conversations_system"]]:
                         del st.session_state["selected_conversation_id"]
                         del st.session_state["messages"]
                 chat_input_container = st.container()
@@ -436,7 +437,7 @@ if st.session_state["authenticated"]:
 
             with st.sidebar:
                 st.info(f"Nice to meet you: {st.session_state['user_name']}", icon=":material/sentiment_satisfied:")
-                st.session_state["conversations_user"] = sql_conn.get_conversation_session_user(st.session_state["user_id"])
+                st.session_state["conversations_user_text"] = sql_conn.get_conversation_session_user_textfile(st.session_state["user_id"])
                 st.header("UpLoad Your Documents", divider='orange')
                 uploaded_file = st.file_uploader("Choose a file", type=["pdf", "docx"])
 
@@ -472,7 +473,7 @@ if st.session_state["authenticated"]:
 
                 # Hiển thị danh sách các file đã upload
                 st.markdown("Uploaded Documents:")
-                files = sql_conn.get_files(st.session_state["user_id"])
+                files = sql_conn.get_files_textfile(st.session_state["user_id"])
 
                 if files:
                     i = 0
@@ -504,18 +505,19 @@ if st.session_state["authenticated"]:
                 st.session_state["create_new_conversation"] = True
                 if "create_new_conversation" in st.session_state and st.session_state["create_new_conversation"]:
                     conversation_name = "New conversation"
+                    type="text_file"
                     if st.button("Create new conversation", icon=":material/add_box:", use_container_width=True):
                         # Tạo một phiên hội thoại mới với loại conversation đã chọn
-                        sql_conn.create_conversation(conversation_name, st.session_state["user_id"])
+                        sql_conn.create_conversation(conversation_name, st.session_state["user_id"], type)
                         # # Lấy danh sách các phiên hội thoại
-                        st.session_state["conversations_user"] = sql_conn.get_conversation_session_user(st.session_state["user_id"])
+                        st.session_state["conversations_user_text"] = sql_conn.get_conversation_session_user_textfile(st.session_state["user_id"])
                         st.session_state["create_new_conversation"] = False
                         st.rerun()
                 
                 st.write("---")
                 # Thêm menu chọn Conversation vào sidebar
-                if "conversations_user" in st.session_state:
-                    for conv in st.session_state["conversations_user"]:
+                if "conversations_user_text" in st.session_state:
+                    for conv in st.session_state["conversations_user_text"]:
                         conversation_col, delete_col = st.columns([5, 1])
                         with conversation_col:
                             # Duyệt qua toàn bộ danh sách hội thoại với User Data và hiển thị dưới dạng nút
@@ -524,7 +526,7 @@ if st.session_state["authenticated"]:
                         with delete_col:
                             if st.button(label="", icon=":material/delete:", key="delete"+f'{conv[0]}', use_container_width=True):
                                 sql_conn.delete_conversation(conv[0])
-                                st.session_state["conversations_user"] = sql_conn.get_conversation_session_user(st.session_state["user_id"])
+                                st.session_state["conversations_user_text"] = sql_conn.get_conversation_session_user_textfile(st.session_state["user_id"])
                                 st.rerun()
 
                 else:
@@ -548,7 +550,7 @@ if st.session_state["authenticated"]:
 
             # question = st.chat_input("What do you want to know?")
             with col2:
-                if "selected_conversation_id" in st.session_state and st.session_state["selected_conversation_id"] in [i[0] for i in st.session_state["conversations_id_system"]]:
+                if "selected_conversation_id" in st.session_state and st.session_state["selected_conversation_id"] not in [i[0] for i in st.session_state["conversations_user_text"]]:
                         del st.session_state["selected_conversation_id"]
                         del st.session_state["messages"]
                 chat_input_container = st.container()
@@ -615,7 +617,7 @@ if st.session_state["authenticated"]:
                                     sql_conn.change_conversation_name(st.session_state["selected_conversation_id"], question)
                                 else:
                                     sql_conn.change_conversation_name(st.session_state["selected_conversation_id"], question[:18]+"...")
-                                st.session_state["conversations_user"] = sql_conn.get_conversation_session_user(st.session_state["user_id"])
+                                st.session_state["conversations_user_text"] = sql_conn.get_conversation_session_user_textfile(st.session_state["user_id"])
                                 st.rerun()
                     else:
                         st.warning("Please select a conversation first!")
@@ -690,6 +692,7 @@ if st.session_state["authenticated"]:
 
         def Chat_With_CSVFile():
             with st.sidebar:
+                st.session_state["conversations_user_csv"] = sql_conn.get_conversation_session_user_csvfile(st.session_state["user_id"])
                 uploaded_file = st.file_uploader("Choose a file", type=["csv", "xls", "xlsx", "xlsm", "xlsb"])
 
                 # Kiểm tra nếu người dùng chọn file
@@ -710,53 +713,138 @@ if st.session_state["authenticated"]:
 
                                 # Gửi request lên FastAPI
                                 response = requests.post(upload_file_endpoint, files=files, data=data)
-
+                                st.session_state["csv_file"] = response.json()
                                 # Hiển thị phản hồi
                                 if response.status_code == 200:
-                                    st.success(response.json())
-                                    if "csv_file" in st.session_state:
-                                        st.session_state["csv_file"].append(uploaded_file.name)
-                                    else:
-                                        st.session_state["csv_file"] = [uploaded_file.name]
-                                    # for i in st.session_state["csv_file"]:
-                                    #     st.markdown(i)
+                                    st.success("Saved dataframe successfully!")
 
                                 else:
                                     st.error(f"Failed to upload file. Error {response.status_code}: {response.text}")
                             except Exception as e:
                                 st.error(f"An error occurred: {str(e)}")
+
                 if "csv_file" in st.session_state:
-                    for i in st.session_state["csv_file"]:
-                        st.markdown(i)
+                    i = 0
+                    for file in st.session_state["csv_file"]:
+                        col1, col2 = st.columns([2, 1])
+                        with col1:
+                            st.markdown(f"📄 {file}", unsafe_allow_html=True)
+                        with col2:
+                            delete_file_endpoint = os.getenv("DELETE_CSV_FILE")
+                            if st.button(label="", icon=":material/delete:", key="delete"+f"{file}{i}", use_container_width=True):
+                                data = {"file_name": file,
+                                        "user_id": st.session_state["user_id"],
+                                        "admin_department": st.session_state["admin_department"]
+                                        }
+                                response = requests.delete(delete_file_endpoint, json=data)
+                                st.session_state["csv_file"] = response.json()
+                                st.success(f"{file} deleted successfully!")
+                                st.rerun()
+                        i += 1
+                # Tạo conversation:
+                st.header("Conversations", divider='orange')
+                # Thêm tùy chọn để tạo cuộc hội thoại mới
+                st.session_state["create_new_conversation"] = True
+                if "create_new_conversation" in st.session_state and st.session_state["create_new_conversation"]:
+                    conversation_name = "New conversation"
+                    type="csv_file"
+                    if st.button("Create new conversation", icon=":material/add_box:", use_container_width=True):
+                        # Tạo một phiên hội thoại mới với loại conversation đã chọn
+                        sql_conn.create_conversation(conversation_name, st.session_state["user_id"], type)
+                        # # Lấy danh sách các phiên hội thoại
+                        st.session_state["conversations_user_csv"] = sql_conn.get_conversation_session_user_csvfile(st.session_state["user_id"])
+                        st.session_state["create_new_conversation"] = False
+                        st.rerun()
+                
+                st.write("---")
+                # Thêm menu chọn Conversation vào sidebar
+                if "conversations_user_csv" in st.session_state:
+                    for conv in st.session_state["conversations_user_csv"]:
+                        conversation_col, delete_col = st.columns([5, 1])
+                        with conversation_col:
+                            # Duyệt qua toàn bộ danh sách hội thoại với User Data và hiển thị dưới dạng nút
+                            if st.button(f"{conv[1]}", icon=":material/chat:", key=f"user_{conv[0]}", use_container_width=True):
+                                st.session_state["selected_conversation_id"] = conv[0]
+                        with delete_col:
+                            if st.button(label="", icon=":material/delete:", key="delete"+f'{conv[0]}', use_container_width=True):
+                                sql_conn.delete_conversation(conv[0])
+                                st.session_state["conversations_user_csv"] = sql_conn.get_conversation_session_user_csvfile(st.session_state["user_id"])
+                                st.rerun()
 
+                else:
+                    st.warning("No user conversation sessions available.")
+            
+            col_1, col_chat, col3 = st.columns([1.15, 5, 2], vertical_alignment="top")
             st.session_state.model = 'gpt-4o-mini'
+            with col_chat:
+                if "selected_conversation_id" in st.session_state and st.session_state["selected_conversation_id"] not in [i[0] for i in st.session_state["conversations_user_csv"]]:
+                    del st.session_state["selected_conversation_id"]
+                    del st.session_state["messages"]
+                chat_input_container = st.container()
+                with chat_input_container:
+                    question = st.chat_input("What do you want to know?")
+                css = float_css_helper(bottom="35px")
+                chat_input_container.float(css)
 
-            question = st.chat_input("What do you want to know?")
+                messages_container = st.container(height=800, border=False)
+                with messages_container:
+                    # Hiển thị lịch sử hội thoại của phiên đã chọn
+                    if "messages" not in st.session_state:
+                        st.session_state.messages = []
 
-            if "messages_" not in st.session_state:
-                st.session_state.messages_ = []
+                    if "selected_conversation_id" in st.session_state:
+                        chat_history = sql_conn.get_chat_history(st.session_state["selected_conversation_id"])
+                        st.session_state.messages = []
+                        # Cập nhật tin nhắn vào session_state.messages nếu có lịch sử
+                        if chat_history:
+                            st.session_state.messages = [
+                                {"role": "user" if sender == "human" else "assistant", "output": message}
+                                for sender, message in chat_history
+                            ]
 
-            for message in st.session_state.messages_:
-                with st.chat_message(message["role"]):
-                    st.markdown(message["output"])
+                    # Hiển thị các tin nhắn trong phiên hội thoại đã chọn
+                    if "messages" in st.session_state:
+                        for message in st.session_state.messages:
+                            with st.chat_message(message["role"]):
+                                st.markdown(message["output"])
+                    # try:
+                    if "selected_conversation_id" in st.session_state:
+                        # try:
+                            # Gửi tin nhắn mới trong giao diện chat
+                            if question:
+                                st.chat_message("user").markdown(question)
+                                st.session_state.messages.append({"role": "user", "output": question})
 
-            # Gửi tin nhắn mới trong giao diện chat
-            try:
-                if question:
-                    st.chat_message("user").markdown(question)
-                    st.session_state.messages_.append({"role": "user", "output": question})
+                                with st.chat_message("assistant"):
+                                    assistant_message = st.empty()
+                                    response = handler_input_csv(question, st.session_state["user_id"], CSV_QA_URL, st.session_state.model)
+                                    assistant_message.markdown(response)
+                                    st.session_state.messages.append({"role": "assistant", "output": response})
 
-                    with st.chat_message("assistant"):
-                        assistant_message = st.empty()
-                        response = handler_input_csv(question, st.session_state["user_id"], CSV_QA_URL, st.session_state.model)
-                        assistant_message.markdown(response)
-                        st.session_state.messages_.append({"role": "assistant", "output": response})
-                        #st.rerun()
-            except:
-                st.warning("Please upload csv file first!")
+                                    sender = ['human', 'ai']
+                                    sql_conn.insert_chat(st.session_state["selected_conversation_id"], sender[0], question)
+                                    sql_conn.insert_chat(st.session_state["selected_conversation_id"], sender[1], response)
 
+                                # Đổi tên conversation nêu tên vẫn còn là new conversation
+                                conversation_name = sql_conn.get_conversation_name_from_conversationid(
+                                    st.session_state["selected_conversation_id"])
+                                if conversation_name == "New conversation":
+                                    if len(question) <= 20:
+                                        sql_conn.change_conversation_name(st.session_state["selected_conversation_id"],
+                                                                          question)
+                                    else:
+                                        sql_conn.change_conversation_name(st.session_state["selected_conversation_id"],
+                                                                          question[:18] + "...")
+                                    st.session_state[
+                                        "conversations_user_text"] = sql_conn.get_conversation_session_user_csvfile(
+                                        st.session_state["user_id"])
+                                    st.rerun()
+                        # except:
+                        #     st.warning("Please upload csv file first!")
+                    else:
+                        st.warning("Please select a conversation first!")
 
-        pg = st.navigation({"System":[st.Page(Chat_Session)], "User": [st.Page(Chat_With_Files), st.Page(Chat_With_CSVFile, title="Chat With CSVFile (Beta)")]})
+        pg = st.navigation({"System": [st.Page(Chat_Session)], "User": [st.Page(Chat_With_Files), st.Page(Chat_With_CSVFile, title="Chat With CSVFile (Beta)")]})
         pg.run()
     
     elif st.session_state["Admin_login"] == True and st.session_state["User_login"] == False:

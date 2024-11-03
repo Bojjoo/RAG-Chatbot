@@ -40,11 +40,6 @@ from langchain_experimental.agents import create_pandas_dataframe_agent
 from langchain_google_genai import ChatGoogleGenerativeAI
 import pandas as pd
 
-# load_dotenv(find_dotenv())
-# load_dotenv()
-# admin_openaikey = os.getenv('OPENAIKEY')
-
-# model_embedding = OpenAIEmbeddings(model=MODEL_EMBEDDING, api_key=admin_openaikey)
 sql_conn = SQLDatabase()
 
 

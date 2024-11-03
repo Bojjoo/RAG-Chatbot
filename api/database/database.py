@@ -25,8 +25,13 @@ class SQLDatabase:
         return self.cur.fetchall()[0][0]
     
     # Lấy ra các conversation session của userid
-    def get_conversation_session_user(self, user_id):
-        self.cur.execute(f"select conversation_id, conversation_name from conversations_user where user_id='{user_id}'")
+    def get_conversation_session_user_textfile(self, user_id):
+        self.cur.execute(f"select conversation_id, conversation_name from conversations_user where user_id='{user_id}' and type='text_file'")
+        a = self.cur.fetchall()
+        return a
+    
+    def get_conversation_session_user_csvfile(self, user_id):
+        self.cur.execute(f"select conversation_id, conversation_name from conversations_user where user_id='{user_id}' and type='csv_file'")
         a = self.cur.fetchall()
         return a
     
@@ -40,8 +45,12 @@ class SQLDatabase:
         self.cur.execute(f"select conversation_id from conversations_system where user_id='{user_id}'")
         return self.cur.fetchall()
 
-    def get_conversationid_user(self, user_id):
-        self.cur.execute(f"select conversation_id from conversations_user where user_id='{user_id}'")
+    def get_conversationid_user_textfile(self, user_id):
+        self.cur.execute(f"select conversation_id from conversations_user where user_id='{user_id}' and type='text_file'")
+        return self.cur.fetchall()
+    
+    def get_conversationid_user_csvfile(self, user_id):
+        self.cur.execute(f"select conversation_id from conversations_user where user_id='{user_id}' and type='csv_file'")
         return self.cur.fetchall()
 
     # Lấy conversation name dựa vào conversation id
@@ -56,11 +65,11 @@ class SQLDatabase:
         return a
     
     # tạo ra một conversation mới
-    def create_conversation(self, conversation_name, user_id):
+    def create_conversation(self, conversation_name, user_id, type):
         conversation_id = "cv" + datetime.now().strftime("%Y%m%d%H%m") + secrets.token_hex(3)
         self.cur.execute(
-            f"""INSERT INTO conversations_user(conversation_id, conversation_name, user_id)
-            VALUES ('{conversation_id}', '{conversation_name}', '{user_id}')""")
+            f"""INSERT INTO conversations_user(conversation_id, conversation_name, user_id, type)
+            VALUES ('{conversation_id}', '{conversation_name}', '{user_id}', '{type}')""")
     
     def create_conversation_system(self, conversation_name, user_id, folder_id):
         conversation_id = "cv" + datetime.now().strftime("%Y%m%d%H%m") + secrets.token_hex(3)
@@ -100,23 +109,28 @@ class SQLDatabase:
 
     # Quản lý file của user
     # Lưu thông tin file của user vào table files
-    def get_total_size(self, user_id):
-        self.cur.execute(f"select sum(size) from files where user_id='{user_id}'")
+    def get_total_size_textfile(self, user_id):
+        self.cur.execute(f"select sum(size) from files where user_id='{user_id}' and type='text_file'")
         total_size = self.cur.fetchall()[0][0]
         return total_size
 
-    def save_file_detail(self, file_name, file_size, user_id):
-        total_size = self.get_total_size(user_id)
+    def save_file_detail(self, file_name, file_size, user_id, type):
+        total_size = self.get_total_size_textfile(user_id)
         if total_size is None or (total_size < 50 and file_size < 20):
             file_id = "fu" + datetime.now().strftime("%Y%m%d%H%m") + secrets.token_hex(3)
-            self.cur.execute(f"insert into files(file_id,file_name,size,user_id) values ('{file_id}','{file_name}','{file_size}','{user_id}')")
+            self.cur.execute(f"insert into files(file_id,file_name,size,user_id,type) values ('{file_id}','{file_name}','{file_size}','{user_id}','{type}')")
             return 1
         elif total_size > 50 or file_size > 20:
             return 0
 
     # Lấy ra các file của user_id
-    def get_files(self, user_id):
-        self.cur.execute(f"select file_name, size from files where user_id='{user_id}'")
+    def get_files_textfile(self, user_id):
+        self.cur.execute(f"select file_name, size from files where user_id='{user_id}'and type='text_file'")
+        files = self.cur.fetchall()
+        return files
+    
+    def get_files_csvfile(self, user_id):
+        self.cur.execute(f"select file_name, size from files where user_id='{user_id}' and type='csv_file'")
         files = self.cur.fetchall()
         return files
 
@@ -129,6 +143,15 @@ class SQLDatabase:
             lst.append(i[0])
         for i in lst:
             self.cur.execute(f"delete from files where file_id ='{i}'")
+
+    def delete_file_csv(self, file_name, user_id):
+        self.cur.execute(f"select file_id from files where file_name='{file_name}' and user_id='{user_id}' and type='csv_file'")
+        a = self.cur.fetchall()
+        lst = []
+        for i in a:
+            lst.append(i[0])
+        for i in lst:
+            self.cur.execute(f"delete from files where file_id ='{i}'")  
 
     # Xóa conversation
     def delete_conversation(self, conversation_id):

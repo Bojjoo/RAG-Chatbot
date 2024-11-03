@@ -28,7 +28,7 @@ dataframe_cache = {}
 sql_conn = SQLDatabase()
 
 agent_cache = {}
-
+agent_conversation_cache = {}
 
 model_openai = ["gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"]
 model_gemini = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro", "gemini-1.5-flash-002", "gemini-1.5-pro-002",
@@ -75,9 +75,16 @@ class PromptTemplateAdmin(BaseModel):
     prompt_text: str
     admin_department: str
 
+
 class HistoryChat(BaseModel):
     history: str
-    
+
+
+class CSVFile(BaseModel):
+    file_name: str
+    user_id: str
+    admin_department: str
+
 
 class CSVQuestion(BaseModel):
     user_id: str
