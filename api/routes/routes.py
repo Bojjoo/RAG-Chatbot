@@ -46,8 +46,8 @@ async def get_response(question_request: QuestionRequest):
     try:
         # With openai model
         if question_request.model in model_openai:
-            apikey = apikeys_cache[f"{question_request.admin_department}"]["openaikey"]
-            bot = ChatBot(openai_apikey=apikey, openai_embedding_key=openai_embedding_apikey_cache[f"{question_request.admin_department}"])
+            bot = ChatBot(openai_apikey=apikeys_cache[f"{question_request.admin_department}"]["openaikey"],
+                          openai_embedding_key=openai_embedding_apikey_cache[f"{question_request.admin_department}"])
 
             user_retriever = retriever_cache[f'{question_request.user_id}']
             user_bm25_retriever = bm25_retriever_cache[f'{question_request.user_id}']
@@ -59,8 +59,8 @@ async def get_response(question_request: QuestionRequest):
 
         # With gemini model
         else:
-            apikey = apikeys_cache[f"{question_request.admin_department}"]["geminikey"]
-            bot = ChatBot(gemini_apikey=apikey, openai_embedding_key=openai_embedding_apikey_cache[f"{question_request.admin_department}"])
+            bot = ChatBot(gemini_apikey=apikeys_cache[f"{question_request.admin_department}"]["geminikey"],
+                          openai_embedding_key=openai_embedding_apikey_cache[f"{question_request.admin_department}"])
 
             user_retriever = retriever_cache[f'{question_request.user_id}']
             user_bm25_retriever = bm25_retriever_cache[f'{question_request.user_id}']
@@ -79,8 +79,8 @@ async def get_response(question_request: QuestionRequestSystem):
     try:
         # With openai model
         if question_request.model in model_openai:
-            apikey = apikeys_cache[f"{question_request.admin_department}"]["openaikey"]
-            bot = ChatBot(openai_apikey=apikey, openai_embedding_key=openai_embedding_apikey_cache[f"{question_request.admin_department}"])
+            bot = ChatBot(openai_apikey=apikeys_cache[f"{question_request.admin_department}"]["openaikey"],
+                          openai_embedding_key=openai_embedding_apikey_cache[f"{question_request.admin_department}"])
 
             system_retriever = retriever_cache_admin[f'{question_request.admin_department}'][f'{question_request.folder_id}']
             system_bm25_retriever = bm25_retriever_cache_admin[f'{question_request.admin_department}'][f'{question_request.folder_id}']
@@ -92,8 +92,8 @@ async def get_response(question_request: QuestionRequestSystem):
 
         # With gemini model
         else:
-            apikey = apikeys_cache[f"{question_request.admin_department}"]["geminikey"]
-            bot = ChatBot(gemini_apikey=apikey, openai_embedding_key=openai_embedding_apikey_cache[f"{question_request.admin_department}"])
+            bot = ChatBot(gemini_apikey=apikeys_cache[f"{question_request.admin_department}"]["geminikey"],
+                          openai_embedding_key=openai_embedding_apikey_cache[f"{question_request.admin_department}"])
 
             system_retriever = retriever_cache_admin[f'{question_request.admin_department}'][f'{question_request.folder_id}']
             system_bm25_retriever = bm25_retriever_cache_admin[f'{question_request.admin_department}'][f'{question_request.folder_id}']
@@ -156,6 +156,15 @@ async def get_response(question: CSVQuestion):
     return response
 
 
+
+@router.get('/get_csv_file/')
+async def get_csv_file(user_id: UserID):
+    try:
+        return [df.name for df in dataframe_cache[f"{user_id.user_id}"]]
+    except:
+        return 0
+
+
 @router.delete("/delete_file/")
 def delete_file(file: FileDelete):
     user_id = file.user_id
@@ -174,6 +183,15 @@ def delete_file(file: FileDelete):
 
 
 # Router for UI
+# Rename conversation
+@router.post("/rename_conversation/")
+async def rename_conversation(history_chat: HistoryChat):
+    rename_bot = ChatBot(openai_apikey=apikeys_cache[f"{history_chat.admin_department}"]["openaikey"],
+                         openai_embedding_key=openai_embedding_apikey_cache[f"{history_chat.admin_department}"])
+    new_name = await rename_bot.rename_conversation(history_chat.history)
+    return new_name
+
+
 # Signin user endpoint
 @router.post("/sign_in_user/")
 async def verify_sign_in(account: SignInAccount):

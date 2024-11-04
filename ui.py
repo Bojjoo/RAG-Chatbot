@@ -1,14 +1,13 @@
 import os
 import requests
-import streamlit as st
-import time
 from api.database.database import SQLDatabase
 from streamlit_float import *
 from api.config import *
 import time
-from dotenv import load_dotenv, find_dotenv
+from dotenv import load_dotenv
 from datetime import datetime
 import secrets
+import streamlit as st
 
 
 st.set_page_config(layout="wide")
@@ -136,7 +135,7 @@ if not st.session_state["authenticated"]:
             new_username = st.text_input("New Username")
             new_password = st.text_input("New Password", type="password")
             confirm_password = st.text_input("Confirm Password", type="password")
-            department = st.radio("What is your department?", ["DG1","DN1"])
+            department = st.radio("What is your department?", ["DG1", "DN1"])
 
             if st.button("Register"):
                 if new_password != confirm_password:
@@ -199,6 +198,18 @@ if not st.session_state["authenticated"]:
                     st.session_state["conversations_id_user_text"] = sql_conn.get_conversationid_user_textfile(st.session_state["user_id"])
                     st.session_state["conversations_id_user_csv"] = sql_conn.get_conversationid_user_csvfile(st.session_state["user_id"])
                     st.session_state["conversations_id_system"] = sql_conn.get_conversationid_system(st.session_state["user_id"])
+
+                    # Lấy file csv của user đã upload
+                    get_csv_file_endpoint = os.getenv("GET_CSV_FILE")
+                    get_csv_data = {
+                        "user_id": st.session_state["user_id"],
+                        "admin_department": st.session_state["admin_department"]
+                    }
+                    response = requests.get(get_csv_file_endpoint, json=get_csv_data)
+                    if response.json() == 0:
+                        pass
+                    else:
+                        st.session_state["csv_file"] = response.json()
 
                     st.session_state["User_login"] = True
 
@@ -269,7 +280,9 @@ if st.session_state["authenticated"]:
                                                                    format_func=lambda x: x[1])
 
                 if st.session_state["selected_folder"]:
-                    st.session_state["conversations_system"] = sql_conn.get_conversation_session_system(st.session_state["user_id"], st.session_state["selected_folder"][0])
+                    st.session_state["conversations_system"] = sql_conn.get_conversation_session_system(
+                                                                                st.session_state["user_id"],
+                                                                                st.session_state["selected_folder"][0])
                     if "prompt_template" not in st.session_state:
                         st.session_state["prompt_template"] = st.session_state["selected_folder"][2]
                     if "title_prompt_template" not in st.session_state:
@@ -281,9 +294,12 @@ if st.session_state["authenticated"]:
                     if "create_new_conversation" in st.session_state and st.session_state["create_new_conversation"]:
                         conversation_name = "New conversation"
                         if st.button("Create new conversation", icon=":material/add_box:", use_container_width=True):
-                            sql_conn.create_conversation_system(conversation_name, st.session_state["user_id"], st.session_state["selected_folder"][0])
+                            sql_conn.create_conversation_system(conversation_name, st.session_state["user_id"],
+                                                                st.session_state["selected_folder"][0])
                             # # Lấy danh sách các phiên hội thoại
-                            st.session_state["conversations_system"] = sql_conn.get_conversation_session_system(st.session_state["user_id"], st.session_state["selected_folder"][0])
+                            st.session_state["conversations_system"] = sql_conn.get_conversation_session_system(
+                                                                                st.session_state["user_id"],
+                                                                                st.session_state["selected_folder"][0])
 
                             st.session_state["create_new_conversation"] = False
                             st.rerun()
@@ -300,7 +316,9 @@ if st.session_state["authenticated"]:
                         with option_col:
                             if st.button(label="", icon=":material/delete:", key="delete" + f'{conv[0]}'):
                                 sql_conn.delete_conversation_system(conv[0])
-                                st.session_state["conversations_system"] = sql_conn.get_conversation_session_system(st.session_state["user_id"], st.session_state["selected_folder"][0])
+                                st.session_state["conversations_system"] = sql_conn.get_conversation_session_system(
+                                                                                st.session_state["user_id"],
+                                                                                st.session_state["selected_folder"][0])
                                 st.rerun()
 
                 else:
@@ -385,13 +403,20 @@ if st.session_state["authenticated"]:
                                 sql_conn.insert_chat_system(st.session_state["selected_conversation_id"], sender[0], question)
                                 sql_conn.insert_chat_system(st.session_state["selected_conversation_id"], sender[1], output)
                             # Đổi tên conversation nêu tên vẫn còn là new conversation
-                            conversation_name = sql_conn.get_conversation_name_from_conversationid_system(st.session_state["selected_conversation_id"])
+                            conversation_name = sql_conn.get_conversation_name_from_conversationid_system(
+                                                                        st.session_state["selected_conversation_id"])
                             if conversation_name == "New conversation":
-                                if len(question) <= 20:
-                                    sql_conn.change_conversation_name_system(st.session_state["selected_conversation_id"], question)
-                                else:
-                                    sql_conn.change_conversation_name_system(st.session_state["selected_conversation_id"], question[:18]+"...")
-                                st.session_state["conversations_system"] = sql_conn.get_conversation_session_system(st.session_state["user_id"], st.session_state["selected_folder"][0])
+                                rename_conversation_endpoint = os.getenv("RENAME_CONVERSATION")
+                                data_for_rename = {
+                                    "history": f"(human:{question[:200]}); (ai: {output[:500]})",
+                                    "admin_department": st.session_state["admin_department"]
+                                }
+                                new_name = requests.post(rename_conversation_endpoint, json=data_for_rename)
+                                sql_conn.change_conversation_name_system(st.session_state["selected_conversation_id"],
+                                                                         new_name.json().strip('"'))
+                                st.session_state["conversations_system"] = sql_conn.get_conversation_session_system(
+                                                                                st.session_state["user_id"],
+                                                                                st.session_state["selected_folder"][0])
                                 st.rerun()
                     else:
                         st.warning("Please select a conversation first!")
@@ -467,7 +492,8 @@ if st.session_state["authenticated"]:
                         # Update lai retriever
                         st.session_state["update_retriever"] = True
                         if st.session_state["update_retriever"]:
-                            retriever_status = get_retriever(st.session_state["user_id"], st.session_state["admin_department"])
+                            retriever_status = get_retriever(st.session_state["user_id"],
+                                                             st.session_state["admin_department"])
                         st.markdown(retriever_status)
                         st.session_state["update_retriever"] = False
 
@@ -491,7 +517,8 @@ if st.session_state["authenticated"]:
                                 # Update lai retriever
                                 st.session_state["update_retriever"] = True
                                 if st.session_state["update_retriever"]:
-                                    retriever_status = get_retriever(st.session_state["user_id"], st.session_state["admin_department"])
+                                    retriever_status = get_retriever(st.session_state["user_id"],
+                                                                     st.session_state["admin_department"])
                                 st.markdown(retriever_status)
                                 st.session_state["update_retriever"] = False
 
@@ -538,9 +565,9 @@ if st.session_state["authenticated"]:
             with col1:
                 option = st.selectbox(
                     label="Model:",
-                    options=("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"
-                            , "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro", "gemini-1.5-flash-002"
-                            , "gemini-1.5-pro-002", "gemini-1.5-flash-8b"),
+                    options=("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo",
+                             "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro", "gemini-1.5-flash-002",
+                             "gemini-1.5-pro-002", "gemini-1.5-flash-8b"),
                     index=None,
                     placeholder="gpt-4o-mini",
                 )
@@ -558,8 +585,8 @@ if st.session_state["authenticated"]:
                     question = st.chat_input("What do you want to know?")
                 css = float_css_helper(bottom="35px")
                 chat_input_container.float(css)
-
-                messages_container = st.container(height=800, border=False)
+                # Phần hiển thị chat
+                messages_container = st.container(height=780, border=False)
                 with messages_container:
                 # Hiển thị lịch sử hội thoại của phiên đã chọn
                     if "messages" not in st.session_state:
@@ -592,8 +619,9 @@ if st.session_state["authenticated"]:
 
                                 prompt_template = st.session_state["prompt_template_user"]
                                 response_stream = handler_input(
-                                    question, st.session_state["selected_conversation_id"], st.session_state["user_id"],
-                                    USER_URL, st.session_state.model, prompt_template, st.session_state["admin_department"])
+                                    question, st.session_state["selected_conversation_id"],
+                                    st.session_state["user_id"], USER_URL, st.session_state.model, prompt_template,
+                                    st.session_state["admin_department"])
 
                                 # Stream and display the assistant's response
                                 output = ""
@@ -613,10 +641,14 @@ if st.session_state["authenticated"]:
                             # Đổi tên conversation nêu tên vẫn còn là new conversation
                             conversation_name = sql_conn.get_conversation_name_from_conversationid(st.session_state["selected_conversation_id"])
                             if conversation_name == "New conversation":
-                                if len(question) <= 20:
-                                    sql_conn.change_conversation_name(st.session_state["selected_conversation_id"], question)
-                                else:
-                                    sql_conn.change_conversation_name(st.session_state["selected_conversation_id"], question[:18]+"...")
+                                rename_conversation_endpoint = os.getenv("RENAME_CONVERSATION")
+                                data_for_rename = {
+                                    "history": f"(human:{question[:200]}); (ai: {output[:500]})",
+                                    "admin_department": st.session_state["admin_department"]
+                                }
+                                new_name = requests.post(rename_conversation_endpoint, json=data_for_rename)
+                                sql_conn.change_conversation_name(st.session_state["selected_conversation_id"],
+                                                                         new_name.json().strip('"'))
                                 st.session_state["conversations_user_text"] = sql_conn.get_conversation_session_user_textfile(st.session_state["user_id"])
                                 st.rerun()
                     else:
@@ -809,42 +841,49 @@ if st.session_state["authenticated"]:
                                 st.markdown(message["output"])
                     # try:
                     if "selected_conversation_id" in st.session_state:
-                        # try:
                             # Gửi tin nhắn mới trong giao diện chat
-                            if question:
-                                st.chat_message("user").markdown(question)
-                                st.session_state.messages.append({"role": "user", "output": question})
+                        if question:
+                            st.chat_message("user").markdown(question)
+                            st.session_state.messages.append({"role": "user", "output": question})
 
-                                with st.chat_message("assistant"):
+                            with st.chat_message("assistant"):
+                                try:
                                     assistant_message = st.empty()
-                                    response = handler_input_csv(question, st.session_state["user_id"], CSV_QA_URL, st.session_state.model)
-                                    assistant_message.markdown(response)
-                                    st.session_state.messages.append({"role": "assistant", "output": response})
+                                    output = handler_input_csv(question, st.session_state["user_id"], CSV_QA_URL,
+                                                               st.session_state.model)
+                                    assistant_message.markdown(output)
+                                    st.session_state.messages.append({"role": "assistant", "output": output})
 
                                     sender = ['human', 'ai']
                                     sql_conn.insert_chat(st.session_state["selected_conversation_id"], sender[0], question)
-                                    sql_conn.insert_chat(st.session_state["selected_conversation_id"], sender[1], response)
+                                    sql_conn.insert_chat(st.session_state["selected_conversation_id"], sender[1], output)
 
-                                # Đổi tên conversation nêu tên vẫn còn là new conversation
-                                conversation_name = sql_conn.get_conversation_name_from_conversationid(
-                                    st.session_state["selected_conversation_id"])
-                                if conversation_name == "New conversation":
-                                    if len(question) <= 20:
-                                        sql_conn.change_conversation_name(st.session_state["selected_conversation_id"],
-                                                                          question)
-                                    else:
-                                        sql_conn.change_conversation_name(st.session_state["selected_conversation_id"],
-                                                                          question[:18] + "...")
-                                    st.session_state[
-                                        "conversations_user_text"] = sql_conn.get_conversation_session_user_csvfile(
-                                        st.session_state["user_id"])
-                                    st.rerun()
-                        # except:
-                        #     st.warning("Please upload csv file first!")
+                                except:
+                                    output = "Please upload csv file first!"
+                                    st.warning("Please upload csv file first!")
+
+                            # Đổi tên conversation nêu tên vẫn còn là new conversation
+                            conversation_name = sql_conn.get_conversation_name_from_conversationid(
+                                st.session_state["selected_conversation_id"])
+                            if conversation_name == "New conversation":
+                                rename_conversation_endpoint = os.getenv("RENAME_CONVERSATION")
+                                data_for_rename = {
+                                    "history": f"(human:{question[:200]}); (ai: {output[:500]})",
+                                    "admin_department": st.session_state["admin_department"]
+                                }
+                                new_name = requests.post(rename_conversation_endpoint, json=data_for_rename)
+                                sql_conn.change_conversation_name(
+                                    st.session_state["selected_conversation_id"], new_name.json().strip('"'))
+
+                                st.session_state[
+                                    "conversations_user_text"] = sql_conn.get_conversation_session_user_csvfile(
+                                    st.session_state["user_id"])
+                                st.rerun()
                     else:
                         st.warning("Please select a conversation first!")
 
-        pg = st.navigation({"System": [st.Page(Chat_Session)], "User": [st.Page(Chat_With_Files), st.Page(Chat_With_CSVFile, title="Chat With CSVFile (Beta)")]})
+        pg = st.navigation({"System": [st.Page(Chat_Session)], "User": [st.Page(Chat_With_Files),
+                            st.Page(Chat_With_CSVFile, title="Chat With CSVFile (Beta)")]})
         pg.run()
     
     elif st.session_state["Admin_login"] == True and st.session_state["User_login"] == False:
@@ -864,9 +903,11 @@ if st.session_state["authenticated"]:
                         st.image(logo)
                     with col2:
                         if name == "openaikey":
-                            st.session_state["openaikey"] = st.text_input(label="OpenAI API Key:", placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+                            st.session_state["openaikey"] = st.text_input(label="OpenAI API Key:",
+                                                                          placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxx")
                         else:
-                            st.session_state["geminikey"] = st.text_input(label="Google Gemini API Key:", placeholder="AIxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+                            st.session_state["geminikey"] = st.text_input(label="Google Gemini API Key:",
+                                                                          placeholder="AIxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
                     with col3:
                         if st.button(label="", icon=":material/send:", key="key"+name):
                             st.session_state["save_apikey"] = True
@@ -879,7 +920,8 @@ if st.session_state["authenticated"]:
                                 response = requests.post(test_key_endpoint, json=data)
                                 if response.json() == 1:
                                     try:
-                                        sql_conn.add_api_key(st.session_state["admin_department"], name, st.session_state[f"{name}"])
+                                        sql_conn.add_api_key(st.session_state["admin_department"], name,
+                                                             st.session_state[f"{name}"])
                                         st.session_state["get_apikey"] = True
                                         if st.session_state["get_apikey"]:
                                             apikey = get_apikey_for_admin(st.session_state["admin_department"])
@@ -888,7 +930,8 @@ if st.session_state["authenticated"]:
                                         time.sleep(1)
 
                                     except:
-                                        sql_conn.change_api_key(st.session_state["admin_department"], name, st.session_state[f"{name}"])
+                                        sql_conn.change_api_key(st.session_state["admin_department"], name,
+                                                                st.session_state[f"{name}"])
                                         st.session_state["get_apikey"] = True
                                         if st.session_state["get_apikey"]:
                                             apikey = get_apikey_for_admin(st.session_state["admin_department"])
@@ -910,7 +953,8 @@ if st.session_state["authenticated"]:
                 with col1:
                     st.image("./logo/gpt-4.webp")
                 with col2:
-                    st.session_state["openai_embedding_key"] = st.text_input(label="OpenAI API Embedding Key:", placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+                    st.session_state["openai_embedding_key"] = st.text_input(label="OpenAI API Embedding Key:",
+                                                                             placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxxx")
                 with col3:
                     if st.button(label="", icon=":material/send:", key="send_openai_embedding_key"):
                         if len(st.session_state["openai_embedding_key"]) > 0:
@@ -921,7 +965,8 @@ if st.session_state["authenticated"]:
                             response = requests.post(test_key_endpoint, json=data)
                             if response.json() == 1:
                                 try:
-                                    sql_conn.add_embedding_key(st.session_state["admin_department"], st.session_state["openai_embedding_key"])
+                                    sql_conn.add_embedding_key(st.session_state["admin_department"],
+                                                               st.session_state["openai_embedding_key"])
                                     st.session_state["get_apikey"] = True
                                     if st.session_state["get_apikey"]:
                                         apikey = get_apikey_for_admin(st.session_state["admin_department"])
@@ -930,7 +975,8 @@ if st.session_state["authenticated"]:
                                     time.sleep(1)
 
                                 except:
-                                    sql_conn.change_api_key(st.session_state["admin_department"], 'openai-embedding', st.session_state["openai_embedding_key"])
+                                    sql_conn.change_api_key(st.session_state["admin_department"], 'openai-embedding',
+                                                            st.session_state["openai_embedding_key"])
                                     st.session_state["get_apikey"] = True
                                     if st.session_state["get_apikey"]:
                                         apikey = get_apikey_for_admin(st.session_state["admin_department"])
@@ -956,15 +1002,17 @@ if st.session_state["authenticated"]:
                 # Upload file
                 uploaded_file = st.file_uploader("Choose a file", type=["pdf", "docx"], key="admin_upload_file")
 
+                create_folder_button = st.button(label="Create folder", icon=":material/create_new_folder:")
                 # Kiểm tra nếu người dùng chọn file
                 if uploaded_file is not None:
                     upload_file_endpoint = os.getenv("UPLOAD_DATA_ADMIN")
-                    if st.button(label="Create folder", icon=":material/create_new_folder:"):
+                    if create_folder_button:
                         # Gửi POST request với file trực tiếp từ Streamlit lên FastAPI
                         with st.spinner("Creating..."):
                             try:
                                 folder_id = "fd" + datetime.now().strftime("%Y%m%d%H%m") + secrets.token_hex(3)
-                                sql_conn.add_folder(folder_id, folder_name, st.session_state["admin_department"], prompt="__Instruction__: "+prompt)
+                                sql_conn.add_folder(folder_id, folder_name, st.session_state["admin_department"],
+                                                    prompt="__Instruction__: "+prompt)
                                 # Định nghĩa multipart-form cho file và các thông tin khác
                                 files = {"file": (uploaded_file.name, uploaded_file)} #, "application/pdf"
                                 data = {"admin_department": st.session_state["admin_department"],
@@ -989,6 +1037,13 @@ if st.session_state["authenticated"]:
                         time.sleep(2)
                         st.session_state["add_folder"] = False
                         st.rerun()
+                else:
+                    if create_folder_button:
+                        folder_id = "fd" + datetime.now().strftime("%Y%m%d%H%m") + secrets.token_hex(3)
+                        sql_conn.add_folder(folder_id, folder_name, st.session_state["admin_department"],
+                                            prompt="__Instruction__: " + prompt)
+                        st.session_state["add_folder"] = False
+                        st.rerun()
             st.write("---")
             st.subheader("All folder")
             st.session_state["all_folder"] = sql_conn.get_folders(st.session_state["admin_department"])
@@ -1005,8 +1060,10 @@ if st.session_state["authenticated"]:
                     with col2:
                         @st.dialog("Edit your folder", width="large")
                         def edit(folder):
-                            new_name = st.text_input("Name of the folder:", placeholder="New folder", key="edit"+f"{folder[0]}faku")
-                            new_prompt = st.text_area("Project Context & Instructions:", key="text_area"+f"{folder[0]}", max_chars=10000)
+                            new_name = st.text_input("Name of the folder:", placeholder="New folder",
+                                                     key="edit"+f"{folder[0]}faku")
+                            new_prompt = st.text_area("Project Context & Instructions:", key="text_area"+f"{folder[0]}",
+                                                      max_chars=10000)
                             
                             #nếu user không nhập nội dung mới mà lỡ bấm save thì vẫn giữ nguyên nội dung cũ
                             if len(new_name) == 0:
@@ -1047,7 +1104,7 @@ if st.session_state["authenticated"]:
                             if uploaded_file is not None:
                                 upload_file_endpoint = os.getenv("UPLOAD_DATA_ADMIN")
 
-                                if st.button(label="Add document", icon=":material/create_new_folder:"):
+                                if st.button(label="Add document", icon=":material/upload:"):
                                     # Gửi POST request với file trực tiếp từ Streamlit lên FastAPI
                                     with st.spinner("Adding..."):
                                         # Định nghĩa multipart-form cho file và các thông tin khác

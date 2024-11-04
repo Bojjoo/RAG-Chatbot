@@ -26,17 +26,17 @@ class SQLDatabase:
     
     # Lấy ra các conversation session của userid
     def get_conversation_session_user_textfile(self, user_id):
-        self.cur.execute(f"select conversation_id, conversation_name from conversations_user where user_id='{user_id}' and type='text_file'")
+        self.cur.execute(f"select conversation_id, conversation_name from conversations_user where user_id='{user_id}' and type='text_file' order by start_time")
         a = self.cur.fetchall()
         return a
     
     def get_conversation_session_user_csvfile(self, user_id):
-        self.cur.execute(f"select conversation_id, conversation_name from conversations_user where user_id='{user_id}' and type='csv_file'")
+        self.cur.execute(f"select conversation_id, conversation_name from conversations_user where user_id='{user_id}' and type='csv_file' order by start_time")
         a = self.cur.fetchall()
         return a
     
     def get_conversation_session_system(self, user_id, folder_id):
-        self.cur.execute(f"select conversation_id, conversation_name from conversations_system where user_id='{user_id}' and folder_id='{folder_id}'")
+        self.cur.execute(f"select conversation_id, conversation_name from conversations_system where user_id='{user_id}' and folder_id='{folder_id}' order by start_time")
         a = self.cur.fetchall()
         return a
 

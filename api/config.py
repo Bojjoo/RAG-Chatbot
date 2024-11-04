@@ -24,7 +24,7 @@ Make sure to identify clearly what is social greeting input to keep the input re
 """
 
 RENAME_CONVERSATION_PROMPT = """give me a name about this conversation based on the first chat history. 
-The length of the name should not be longer than 35 characters.\n"""
+The length of the name should not be longer than 20 characters.\n"""
 
 # Retriever
 SEARCH_KWARGS = {'k': 25, 'score_threshold': 0.01, 'sorted': True}

@@ -13,12 +13,13 @@ import shutil
 openai_embedding_apikey_cache ={}
 apikeys_cache = {}
 router = APIRouter()
-#for users's files
+
+# for users's files
 retriever_cache = {}
 vectorstore_cache = {}
 bm25_retriever_cache = {}
 
-#for admin's files
+# for admin's files
 retriever_cache_admin = {}
 vectorstore_cache_admin = {}
 bm25_retriever_cache_admin = {}
@@ -78,6 +79,7 @@ class PromptTemplateAdmin(BaseModel):
 
 class HistoryChat(BaseModel):
     history: str
+    admin_department: str
 
 
 class CSVFile(BaseModel):

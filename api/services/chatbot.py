@@ -75,36 +75,37 @@ class ChatBot:
     async def question_handler(self, retriever, bm25_retriever, question_request: QuestionRequest):
         # Get history and generate new question
         history = sql_conn.get_chat_history(question_request.conversation_id)[-8::]
-        new_question = self.reformulate_question(question_request.question, history)
         # Nếu prompt template là system rag thì sử dụng retriever để retrieve data, còn không thì thôi
         if retriever:
             if question_request.prompt_template.startswith("__Rag__"):
+                new_question = self.reformulate_question(question_request.question, history)
                 context = await self.retriever(new_question, retriever, bm25_retriever)
                 prompt = self.prompt_rag(new_question, context, history, question_request.prompt_template)
             else:
-                prompt = self.prompt_user(new_question, history, question_request.prompt_template)
+                prompt = self.prompt_user(question_request.question, history, question_request.prompt_template)
             return prompt
         else:
-            prompt = self.prompt_user(new_question, history, question_request.prompt_template)
+            prompt = self.prompt_user(question_request.question, history, question_request.prompt_template)
             return prompt
 
     async def question_handler_system(self, retriever, bm25_retriever, question_request: QuestionRequestSystem):
         # Get history and generate new question
         history = sql_conn.get_chat_history_system(question_request.conversation_id)[-8::]
-        new_question = self.reformulate_question(question_request.question, history)
         # Nếu prompt template là system rag thì sử dụng retriever để retrieve data, còn không thì thôi
         if retriever:
             if question_request.prompt.startswith("__Rag__"):
+                new_question = self.reformulate_question(question_request.question, history)
                 context = await self.retriever(new_question, retriever, bm25_retriever)
                 prompt = self.prompt_rag(new_question, context, history, question_request.prompt)
             elif question_request.prompt.startswith("__Instruction__"):
+                new_question = self.reformulate_question(question_request.question, history)
                 context = await self.retriever(new_question, retriever, bm25_retriever)
                 prompt = self.prompt_folder(new_question, context, history, question_request.prompt)
             else:
-                prompt = self.prompt_user(new_question, history, question_request.prompt)
+                prompt = self.prompt_user(question_request.question, history, question_request.prompt)
             return prompt
         else:
-            prompt = self.prompt_user(new_question, history, question_request.prompt)
+            prompt = self.prompt_user(question_request.question, history, question_request.prompt)
             return prompt
 
     # Streaming response to fastapi endpoint
@@ -127,12 +128,12 @@ class ChatBot:
 
     def send_message_gemini(self, prompt: str, model: str) -> AsyncIterable[str]:
         self.model_llm = ChatGoogleGenerativeAI(temperature=TEMPERATURE, model=model, streaming=True,
-                                    api_key=self.gemini_apikey)
+                                                api_key=self.gemini_apikey)
         answer = self.model_llm.stream(prompt)
         for i in answer:
             yield i.content
     
-    def rename_conversation(self, history):
+    async def rename_conversation(self, history):
         rename_conversation_prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", RENAME_CONVERSATION_PROMPT),
@@ -140,7 +141,7 @@ class ChatBot:
             ]
         )
         rename_pt = rename_conversation_prompt.format(chat_history=history)
-        new_name = self.model_reformulate_question.invoke(rename_pt)
+        new_name = await self.model_reformulate_question.ainvoke(rename_pt)
         return new_name.content
 
 
