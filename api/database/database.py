@@ -261,7 +261,7 @@ class SQLDatabase:
     # Folder project của admin
     def add_folder(self, folder_id, folder_name, admin_department, prompt):
         query = "insert into folders(folder_id, folder_name, admin_department, prompt) values(%s, %s, %s, %s)"
-        self.cur.execute(query, (folder_id,folder_name, admin_department, prompt))
+        self.cur.execute(query, (folder_id, folder_name, admin_department, prompt))
 
     # Xóa folder
     def delete_folder(self, folder_id):

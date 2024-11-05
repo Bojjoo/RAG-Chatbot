@@ -274,59 +274,61 @@ if st.session_state["authenticated"]:
             with st.sidebar:
                 st.info(f"Nice to meet you: {st.session_state['user_name']}", icon=":material/sentiment_satisfied:")
                 st.session_state["folders"] = sql_conn.get_folders(st.session_state["admin_department"])
-                st.session_state["selected_folder"] = st.selectbox(label="Select project folder",
-                                                                   options=st.session_state["folders"],
-                                                                   index=0,
-                                                                   format_func=lambda x: x[1])
 
-                if st.session_state["selected_folder"]:
-                    st.session_state["conversations_system"] = sql_conn.get_conversation_session_system(
-                                                                                st.session_state["user_id"],
-                                                                                st.session_state["selected_folder"][0])
-                    if "prompt_template" not in st.session_state:
-                        st.session_state["prompt_template"] = st.session_state["selected_folder"][2]
-                    if "title_prompt_template" not in st.session_state:
-                        st.session_state["title_prompt_template"] = "Instruction of folder " + f"{st.session_state['selected_folder'][1]}"
+                # Lấy ra tất cả system conversation id
+                st.session_state["conversations_system"] = []
+                for folder in st.session_state["folders"]:
+                    with st.expander(folder[1]):
 
-                    st.header("Conversations", divider='orange')
-                    # Create conversation
-                    st.session_state["create_new_conversation"] = True
-                    if "create_new_conversation" in st.session_state and st.session_state["create_new_conversation"]:
-                        conversation_name = "New conversation"
-                        if st.button("Create new conversation", icon=":material/add_box:", use_container_width=True):
-                            sql_conn.create_conversation_system(conversation_name, st.session_state["user_id"],
-                                                                st.session_state["selected_folder"][0])
-                            # # Lấy danh sách các phiên hội thoại
-                            st.session_state["conversations_system"] = sql_conn.get_conversation_session_system(
-                                                                                st.session_state["user_id"],
-                                                                                st.session_state["selected_folder"][0])
+                        # Create conversation
+                        col_1, col_2 = st.columns([1, 2])
+                        with col_1:
+                            st.session_state["create_new_conversation"] = True
+                            if st.session_state["create_new_conversation"]:
+                                conversation_name = "New conversation"
+                                if st.button(label="", icon=":material/add_box:",
+                                             key="create_conversation_system" + f"{folder[0]}"):
+                                    sql_conn.create_conversation_system(conversation_name, st.session_state["user_id"],
+                                                                        folder[0])
+                                    # # Lấy danh sách các phiên hội thoại
+                                    st.session_state[
+                                        f"conversations_system_{folder[0]}"] = sql_conn.get_conversation_session_system(
+                                        st.session_state["user_id"], folder[0])
 
-                            st.session_state["create_new_conversation"] = False
-                            st.rerun()
-                st.write("---")
-                # Hiển thị các conversations
-                if "conversations_system" in st.session_state:
-                    for conv in st.session_state["conversations_system"]:
-                        conversation_col, option_col = st.columns([5, 1])
-                        with conversation_col:
-                            # Duyệt qua toàn bộ danh sách hội thoại với System và hiển thị dưới dạng nút
-                            if st.button(f"{conv[1]}", icon=":material/chat:", key=f"system_{conv[0]}",
-                                         use_container_width=True):
-                                st.session_state["selected_conversation_id"] = conv[0]
-                        with option_col:
-                            if st.button(label="", icon=":material/delete:", key="delete" + f'{conv[0]}'):
-                                sql_conn.delete_conversation_system(conv[0])
-                                st.session_state["conversations_system"] = sql_conn.get_conversation_session_system(
-                                                                                st.session_state["user_id"],
-                                                                                st.session_state["selected_folder"][0])
-                                st.rerun()
+                                    st.session_state["create_new_conversation"] = False
+                                    st.rerun()
 
-                else:
-                    st.warning("No system conversation sessions available.")
+                        # All conversations
+                        st.session_state[f"conversations_system_{folder[0]}"] = sql_conn.get_conversation_session_system(
+                                                                                st.session_state["user_id"], folder[0])
+                        # Correct way to populate the conversation IDs
+                        st.session_state["conversations_system"].extend([i[0] for i in st.session_state[f"conversations_system_{folder[0]}"]])
+
+                        # Hiển thị conversation của folder đó
+                        if f"conversations_system_{folder[0]}" in st.session_state:
+                            for conv in st.session_state[f"conversations_system_{folder[0]}"]:
+                                conversation_col, option_col = st.columns([5, 1])
+                                with conversation_col:
+                                    # Duyệt qua toàn bộ danh sách hội thoại với System và hiển thị dưới dạng nút
+                                    if st.button(f"{conv[1]}", icon=":material/chat:", key=f"system_{conv[0]}", use_container_width=True):
+                                        st.session_state["selected_conversation_id"] = (conv[0], folder[0], folder[1],
+                                                                                        folder[2])
+                                with option_col:
+                                    if st.button(label="", icon=":material/delete:", key="delete" + f'{conv[0]}'):
+                                        sql_conn.delete_conversation_system(conv[0])
+                                        st.session_state[f"conversations_system_{folder[0]}"] = sql_conn.get_conversation_session_system(st.session_state["user_id"], folder[0])
+                                        st.rerun()
+                        else:
+                            st.warning("No system conversation sessions available.")
+                            # Cần check lại cái này vì nó sẽ lưu prompt và title của folder cuối cùng
+                        if "prompt_template" not in st.session_state:
+                            st.session_state[f"prompt_template_{folder[0]}"] = folder[2]
+                        if "title_prompt_template" not in st.session_state:
+                            st.session_state[f"title_prompt_template_{folder[0]}"] = "Instruction of folder " + f"{folder[1]}"
 
             # Select model
             st.session_state.model = 'gpt-4o-mini'
-            col1, col2, col3 = st.columns([1.15, 5, 2], vertical_alignment="top")
+            col1, col2, col3 = st.columns([1.4, 6, 2], vertical_alignment="top")
 
             with col1:
                 option = st.selectbox(
@@ -339,11 +341,12 @@ if st.session_state["authenticated"]:
                 )
                 if option:
                     st.session_state.model = option
-            col1.float()
+            css_col1 = float_css_helper(top="70px")
+            col1.float(css_col1)
 
             # Chat session
             with col2:
-                if "selected_conversation_id" in st.session_state and st.session_state["selected_conversation_id"] not in [i[0] for i in st.session_state["conversations_system"]]:
+                if "selected_conversation_id" in st.session_state and st.session_state["selected_conversation_id"][0] not in [i for i in st.session_state["conversations_system"]]:
                         del st.session_state["selected_conversation_id"]
                         del st.session_state["messages"]
                 chat_input_container = st.container()
@@ -353,13 +356,14 @@ if st.session_state["authenticated"]:
                 chat_input_container.float(css_chat_input_container)
                 
                 # Hiển thị lịch sử hội thoại của phiên đã chọn
-                messages_container = st.container(height=800, border=False)
+
+                messages_container = st.container(border=False) #height=800,
                 with messages_container:
                     if "messages" not in st.session_state:
                         st.session_state.messages = []
 
                     if "selected_conversation_id" in st.session_state:
-                        chat_history = sql_conn.get_chat_history_system(st.session_state["selected_conversation_id"])
+                        chat_history = sql_conn.get_chat_history_system(st.session_state["selected_conversation_id"][0])
                         st.session_state.messages = []
                         # Cập nhật tin nhắn vào session_state.messages nếu có lịch sử
                         if chat_history:
@@ -384,10 +388,10 @@ if st.session_state["authenticated"]:
 
                                 prompt = st.session_state["prompt_template"]
 
-                                response_stream = handler_input_system(question, st.session_state["selected_conversation_id"],
-                                                    st.session_state["user_id"], SYSTEM_URL,
-                                                    st.session_state.model, st.session_state["admin_department"],
-                                                    st.session_state["selected_folder"][0], prompt)
+                                response_stream = handler_input_system(question, st.session_state["selected_conversation_id"][0],
+                                                                       st.session_state["user_id"], SYSTEM_URL,
+                                                                       st.session_state.model, st.session_state["admin_department"],
+                                                                       st.session_state["selected_conversation_id"][1], prompt)
                                 # Stream and display the assistant's response
                                 output = ""
                                 for token in response_stream:
@@ -400,11 +404,11 @@ if st.session_state["authenticated"]:
                                 st.warning("Please provide your api key first!")
                             else:
                                 sender = ['human', 'ai']
-                                sql_conn.insert_chat_system(st.session_state["selected_conversation_id"], sender[0], question)
-                                sql_conn.insert_chat_system(st.session_state["selected_conversation_id"], sender[1], output)
+                                sql_conn.insert_chat_system(st.session_state["selected_conversation_id"][0], sender[0], question)
+                                sql_conn.insert_chat_system(st.session_state["selected_conversation_id"][0], sender[1], output)
                             # Đổi tên conversation nêu tên vẫn còn là new conversation
                             conversation_name = sql_conn.get_conversation_name_from_conversationid_system(
-                                                                        st.session_state["selected_conversation_id"])
+                                                                        st.session_state["selected_conversation_id"][0])
                             if conversation_name == "New conversation":
                                 rename_conversation_endpoint = os.getenv("RENAME_CONVERSATION")
                                 data_for_rename = {
@@ -412,14 +416,16 @@ if st.session_state["authenticated"]:
                                     "admin_department": st.session_state["admin_department"]
                                 }
                                 new_name = requests.post(rename_conversation_endpoint, json=data_for_rename)
-                                sql_conn.change_conversation_name_system(st.session_state["selected_conversation_id"],
+                                sql_conn.change_conversation_name_system(st.session_state["selected_conversation_id"][0],
                                                                          new_name.json().strip('"'))
                                 st.session_state["conversations_system"] = sql_conn.get_conversation_session_system(
                                                                                 st.session_state["user_id"],
-                                                                                st.session_state["selected_folder"][0])
+                                                                                st.session_state["selected_conversation_id"][1])
                                 st.rerun()
                     else:
                         st.warning("Please select a conversation first!")
+                    css_chat_message_container = float_css_helper(bottom="80px", top="70px", overflow_y="auto")
+                    messages_container.float(css_chat_message_container)
 
             with col3:
                 st.markdown(f'Prompt Template is using: {st.session_state["title_prompt_template"]}')
@@ -429,8 +435,8 @@ if st.session_state["authenticated"]:
                         with st.popover("Chat with document", use_container_width=True):
                             st.markdown(f"{PROMPT_TEMPLATE}")
                     elif st.session_state["title_prompt_template"] == "Chat with document":
-                        with st.popover("Instruction of folder " + f"{st.session_state['selected_folder'][1]}", use_container_width=True):
-                            st.markdown(st.session_state['selected_folder'][2])
+                        with st.popover("Instruction of folder " + f"{st.session_state['selected_conversation_id'][2]}", use_container_width=True):
+                            st.markdown(st.session_state['selected_conversation_id'][3])
                     elif st.session_state["title_prompt_template"] == "Instruction of folder":
                         with st.popover("Normal QA", use_container_width=True):
                             st.markdown(" ")
@@ -442,7 +448,7 @@ if st.session_state["authenticated"]:
                             st.session_state["title_prompt_template"] = "Chat with document"
 
                         elif st.session_state["title_prompt_template"] == "Chat with document":
-                            st.session_state["prompt_template"] = st.session_state['selected_folder'][2]
+                            st.session_state["prompt_template"] = st.session_state['selected_conversation_id'][3]
                             st.session_state["title_prompt_template"] = "Instruction of folder"
 
                         elif st.session_state["title_prompt_template"] == "Instruction of folder":
@@ -573,7 +579,8 @@ if st.session_state["authenticated"]:
                 )
                 if option:
                     st.session_state.model = option
-            col1.float()
+            css_col1 = float_css_helper(top="70px")
+            col1.float(css_col1)
 
             # question = st.chat_input("What do you want to know?")
             with col2:
@@ -585,8 +592,9 @@ if st.session_state["authenticated"]:
                     question = st.chat_input("What do you want to know?")
                 css = float_css_helper(bottom="35px")
                 chat_input_container.float(css)
+
                 # Phần hiển thị chat
-                messages_container = st.container(height=780, border=False)
+                messages_container = st.container(border=False)
                 with messages_container:
                 # Hiển thị lịch sử hội thoại của phiên đã chọn
                     if "messages" not in st.session_state:
@@ -653,10 +661,11 @@ if st.session_state["authenticated"]:
                                 st.rerun()
                     else:
                         st.warning("Please select a conversation first!")
+                css_chat_message_container = float_css_helper(bottom="80px", top="70px", overflow_y="auto")
+                messages_container.float(css_chat_message_container)
 
             with col3:
                 st.markdown(f'Prompt Template is using: {st.session_state["title_prompt_template_user"]}')
-                #st.markdown("System Prompt Template:")
                 col_1, col_2 = st.columns([3, 1.5])
                 with col_1:
                     if st.session_state["title_prompt_template_user"] == "Normal QA":
@@ -881,6 +890,8 @@ if st.session_state["authenticated"]:
                                 st.rerun()
                     else:
                         st.warning("Please select a conversation first!")
+                css_chat_message_container = float_css_helper(bottom="80px", top="70px", overflow_y="auto")
+                messages_container.float(css_chat_message_container)
 
         pg = st.navigation({"System": [st.Page(Chat_Session)], "User": [st.Page(Chat_With_Files),
                             st.Page(Chat_With_CSVFile, title="Chat With CSVFile (Beta)")]})
