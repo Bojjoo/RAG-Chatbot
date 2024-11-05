@@ -156,7 +156,6 @@ async def get_response(question: CSVQuestion):
     return response
 
 
-
 @router.get('/get_csv_file/')
 async def get_csv_file(user_id: UserID):
     try:
@@ -294,6 +293,7 @@ def delete_folder(folder: Folder):
     if os.path.exists(f"./data/data_system/{admin_department}/{folder_id}"):
         shutil.rmtree(f"./data/data_system/{admin_department}/{folder_id}")
     sql_conn.delete_folder(folder_id)
+
 
 @router.post('/add_prompt_template_admin/')
 async def add_prompt_template_admin(prompt_template: PromptTemplateAdmin):

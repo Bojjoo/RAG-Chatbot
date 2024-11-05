@@ -431,15 +431,18 @@ if st.session_state["authenticated"]:
                 st.markdown(f'Prompt Template is using: {st.session_state["title_prompt_template"]}')
                 col_1, col_2 = st.columns([3, 1.5])
                 with col_1:
-                    if st.session_state["title_prompt_template"] == "Normal QA":
-                        with st.popover("Chat with document", use_container_width=True):
-                            st.markdown(f"{PROMPT_TEMPLATE}")
-                    elif st.session_state["title_prompt_template"] == "Chat with document":
-                        with st.popover("Instruction of folder " + f"{st.session_state['selected_conversation_id'][2]}", use_container_width=True):
-                            st.markdown(st.session_state['selected_conversation_id'][3])
-                    elif st.session_state["title_prompt_template"] == "Instruction of folder":
-                        with st.popover("Normal QA", use_container_width=True):
-                            st.markdown(" ")
+                    try:
+                        if st.session_state["title_prompt_template"] == "Normal QA":
+                            with st.popover("Chat with document", use_container_width=True):
+                                st.markdown(f"{PROMPT_TEMPLATE}")
+                        elif st.session_state["title_prompt_template"] == "Chat with document":
+                            with st.popover("Instruction of folder " + f"{st.session_state['selected_conversation_id'][2]}", use_container_width=True):
+                                st.markdown(st.session_state['selected_conversation_id'][3])
+                        elif st.session_state["title_prompt_template"] == "Instruction of folder":
+                            with st.popover("Normal QA", use_container_width=True):
+                                st.markdown(" ")
+                    except:
+                        st.warning("Choose a conversation first!")
 
                 with col_2:
                     if st.button("Switch", key='switch_prompt_template'):
@@ -448,14 +451,17 @@ if st.session_state["authenticated"]:
                             st.session_state["title_prompt_template"] = "Chat with document"
 
                         elif st.session_state["title_prompt_template"] == "Chat with document":
-                            st.session_state["prompt_template"] = st.session_state['selected_conversation_id'][3]
-                            st.session_state["title_prompt_template"] = "Instruction of folder"
+                            try:
+                                st.session_state["prompt_template"] = st.session_state['selected_conversation_id'][3]
+                                st.session_state["title_prompt_template"] = "Instruction of folder"
+                            except:
+                                st.warning("There are no Project Folders!")
 
                         elif st.session_state["title_prompt_template"] == "Instruction of folder":
                             st.session_state["prompt_template"] = " "
                             st.session_state["title_prompt_template"] = "Normal QA"
-
                         st.rerun()
+
             col3.float()
 
         # Chat with user's files

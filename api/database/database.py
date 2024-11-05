@@ -265,6 +265,8 @@ class SQLDatabase:
 
     # Xóa folder
     def delete_folder(self, folder_id):
+        self.cur.execute(f"delete from messages_system where conversation_id in (select conversation_id from conversations_system where folder_id ='{folder_id}')")
+        self.cur.execute(f"delete from conversations_system where conversation_id in (select conversation_id from conversations_system where folder_id ='{folder_id}')")
         self.cur.execute(f"delete from folder_files where folder_id = '{folder_id}'")
         self.cur.execute(f"delete from folders where folder_id = '{folder_id}'")
     

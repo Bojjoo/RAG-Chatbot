@@ -65,7 +65,7 @@ class VectorStore:
     # upload file và lưu vào vectorstore faiss, lưu file vào folder của conversation_id
     def upload_file(self, file: UploadFile = File(...), user_id: str = Form(...)):
         name = file.filename
-        type="text_file"
+        type = "text_file"
         if name.endswith('.pdf') or name.endswith('docx'):
             # Lấy ra file size
             file.file.seek(0, os.SEEK_END)
@@ -163,7 +163,6 @@ class VectorStoreAdmin:
         os.remove(f"{SYSTEM_DOCUMENT}/{admin_department}/{folder_id}/{file_name}")
         sql_conn.delete_file_admin(file_name, folder_id)
 
-    
     def upload_file(self, file: UploadFile = File(...), admin_department: str = Form(...),folder_id: str = Form(...)):
         name = file.filename
         if name.endswith('.pdf') or name.endswith('docx'):
