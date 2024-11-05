@@ -433,14 +433,14 @@ if st.session_state["authenticated"]:
                 with col_1:
                     try:
                         if st.session_state["title_prompt_template"] == "Normal QA":
-                            with st.popover("Chat with document", use_container_width=True):
-                                st.markdown(f"{PROMPT_TEMPLATE}")
-                        elif st.session_state["title_prompt_template"] == "Chat with document":
-                            with st.popover("Instruction of folder " + f"{st.session_state['selected_conversation_id'][2]}", use_container_width=True):
-                                st.markdown(st.session_state['selected_conversation_id'][3])
-                        elif st.session_state["title_prompt_template"] == "Instruction of folder":
                             with st.popover("Normal QA", use_container_width=True):
                                 st.markdown(" ")
+                        elif st.session_state["title_prompt_template"] == "Chat with document":
+                            with st.popover("Chat with document", use_container_width=True):
+                                st.markdown(f"{PROMPT_TEMPLATE}")
+                        elif st.session_state["title_prompt_template"] == "Instruction of folder":
+                            with st.popover("Instruction of folder " + f"{st.session_state['selected_conversation_id'][2]}", use_container_width=True):
+                                st.markdown(st.session_state['selected_conversation_id'][3])
                     except:
                         st.warning("Choose a conversation first!")
 

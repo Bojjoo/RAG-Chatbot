@@ -40,7 +40,7 @@ class ChatBot:
                 ("system", "Chat history: \n {chat_history}\n"),
                 ("system", "Context about relevant data: \n"),
                 ("system", "{context}\n"),
-                ("system", "Answer the question based on the above context: {question}"),
+                ("system", "Answer the question base on the above context: {question}"),
             ]
         )
         prompt = llm_prompt.format(chat_history=history, context=context, question=question)
@@ -65,7 +65,7 @@ class ChatBot:
                 ("system", "Chat history: \n {chat_history}\n"),
                 ("system", "Context about relevant data: \n"),
                 ("system", "{context}\n"),
-                ("system", "Answer the question based on the above context and instruction: {question}"),
+                ("system", "Answer the question base on the above context and instruction: {question}"),
             ]
         )
         prompt = llm_prompt.format(chat_history=history, context=context, question=question)
