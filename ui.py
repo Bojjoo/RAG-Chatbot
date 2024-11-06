@@ -25,16 +25,19 @@ CSV_QA_URL = os.getenv("CSV_QA_URL")
 SYSTEM_RETRIEVER = os.getenv("SYSTEM_RETRIEVER")
 
 
-def handler_input(question: str, conversation_id: str, user_id: str, url, model, prompt_template, admin_department):
-    data = {
+def handler_input_user(question, conversation_id, user_id, url, model, prompt_template,
+                       admin_department, folder_id, prompt_folder):
+    question_data = {
         "question": question,
         "conversation_id": conversation_id,
         "prompt_template": prompt_template,
         "user_id": user_id,
         "model": model,
-        "admin_department": admin_department
+        "admin_department": admin_department,
+        "folder_id": folder_id,
+        "prompt_folder": prompt_folder
     }
-    response = requests.post(url=url, json=data, stream=True)
+    response = requests.post(url=url, json=question_data, stream=True)
 
     if response.status_code == 200:
         for chunk in response.iter_content(chunk_size=1024, decode_unicode=True):
@@ -44,17 +47,19 @@ def handler_input(question: str, conversation_id: str, user_id: str, url, model,
         yield f"Error: {response.status_code} - {response.reason}"
 
 
-def handler_input_system(question: str, conversation_id: str, user_id: str, url, model, admin_department, folder_id, prompt):
-    data = {
+def handler_input_system(question, conversation_id, user_id, url, model,
+                         admin_department, folder_id, prompt_template, prompt_folder):
+    question_data = {
         "question": question,
         "conversation_id": conversation_id,
+        "prompt_template": prompt_template,
         "user_id": user_id,
         "model": model,
         "admin_department": admin_department,
         "folder_id": folder_id,
-        "prompt": prompt
+        "prompt_folder": prompt_folder
     }
-    response = requests.post(url=url, json=data, stream=True)
+    response = requests.post(url=url, json=question_data, stream=True)
 
     if response.status_code == 200:
         for chunk in response.iter_content(chunk_size=1024, decode_unicode=True):
@@ -74,6 +79,7 @@ def handler_input_csv(question: str, user_id: str, url, model):
 
     return response.json()
 
+
 def get_apikey_for_admin(admin_department: str):
     data = {
         "admin_department": admin_department
@@ -82,9 +88,11 @@ def get_apikey_for_admin(admin_department: str):
     response = requests.post(url=url, json=data)
     return response.json()
 
-def get_retriever(user_id: str, admin_department: str):
+
+def get_retriever(user_id: str, admin_department: str, folder_id: str):
     data = {
         "user_id": user_id,
+        "folder_id": folder_id,
         "admin_department": admin_department
     }
     try:
@@ -98,6 +106,7 @@ def get_retriever(user_id: str, admin_department: str):
             return f"Error {response.status_code}: {response.text}"
     except Exception as e:
         return f"Error: {str(e)}"
+
 
 def get_retriever_admin(admin_department: str, folder_id: str):
     data = {
@@ -115,7 +124,6 @@ def get_retriever_admin(admin_department: str, folder_id: str):
             return f"Error {response.status_code}: {response.text}"
     except Exception as e:
         return f"Error: {str(e)}"
-
 
 
 # Màn hình đăng nhập
@@ -188,16 +196,17 @@ if not st.session_state["authenticated"]:
 
                     # Lấy db Faiss của user
                     st.session_state["update_retriever"] = True
+                    folders = sql_conn.get_folders_user(st.session_state["user_id"])
                     if st.session_state["update_retriever"]:
-                        user_retriever = get_retriever(st.session_state["user_id"], st.session_state["admin_department"])
-                        if user_retriever == "None":
-                            st.warning("Look like you have not uploaded any documents yet! Please upload your documents first!")
+                        for i in folders:
+                            user_retriever = get_retriever(st.session_state["user_id"],
+                                                           st.session_state["admin_department"], i[0])
                     st.session_state["update_retriever"] = False
 
                     # Lấy danh sách các phiên hội thoại
-                    st.session_state["conversations_id_user_text"] = sql_conn.get_conversationid_user_textfile(st.session_state["user_id"])
-                    st.session_state["conversations_id_user_csv"] = sql_conn.get_conversationid_user_csvfile(st.session_state["user_id"])
-                    st.session_state["conversations_id_system"] = sql_conn.get_conversationid_system(st.session_state["user_id"])
+                    # st.session_state["conversations_id_user_text"] = sql_conn.get_conversationid_user_textfile(st.session_state["user_id"])
+                    # st.session_state["conversations_id_user_csv"] = sql_conn.get_conversationid_user_csvfile(st.session_state["user_id"])
+                    # st.session_state["conversations_id_system"] = sql_conn.get_conversationid_system(st.session_state["user_id"])
 
                     # Lấy file csv của user đã upload
                     get_csv_file_endpoint = os.getenv("GET_CSV_FILE")
@@ -317,6 +326,7 @@ if st.session_state["authenticated"]:
                                     if st.button(label="", icon=":material/delete:", key="delete" + f'{conv[0]}'):
                                         sql_conn.delete_conversation_system(conv[0])
                                         st.session_state[f"conversations_system_{folder[0]}"] = sql_conn.get_conversation_session_system(st.session_state["user_id"], folder[0])
+                                        st.session_state["conversations_system"].remove(conv[0])
                                         st.rerun()
                         else:
                             st.warning("No system conversation sessions available.")
@@ -346,7 +356,7 @@ if st.session_state["authenticated"]:
 
             # Chat session
             with col2:
-                if "selected_conversation_id" in st.session_state and st.session_state["selected_conversation_id"][0] not in [i for i in st.session_state["conversations_system"]]:
+                if "selected_conversation_id" in st.session_state and st.session_state["selected_conversation_id"][0] not in st.session_state["conversations_system"]:
                         del st.session_state["selected_conversation_id"]
                         del st.session_state["messages"]
                 chat_input_container = st.container()
@@ -388,10 +398,13 @@ if st.session_state["authenticated"]:
 
                                 prompt = st.session_state["prompt_template"]
 
-                                response_stream = handler_input_system(question, st.session_state["selected_conversation_id"][0],
-                                                                       st.session_state["user_id"], SYSTEM_URL,
-                                                                       st.session_state.model, st.session_state["admin_department"],
-                                                                       st.session_state["selected_conversation_id"][1], prompt)
+                                response_stream = handler_input_system(
+                                               question, st.session_state["selected_conversation_id"][0],
+                                               st.session_state["user_id"], SYSTEM_URL,
+                                               st.session_state.model, st.session_state["admin_department"],
+                                               st.session_state["selected_conversation_id"][1], prompt,
+                                               st.session_state["selected_conversation_id"][3]
+                                    )
                                 # Stream and display the assistant's response
                                 output = ""
                                 for token in response_stream:
@@ -438,26 +451,15 @@ if st.session_state["authenticated"]:
                         elif st.session_state["title_prompt_template"] == "Chat with document":
                             with st.popover("Chat with document", use_container_width=True):
                                 st.markdown(f"{PROMPT_TEMPLATE}")
-                        elif st.session_state["title_prompt_template"] == "Instruction of folder":
-                            with st.popover("Instruction of folder " + f"{st.session_state['selected_conversation_id'][2]}", use_container_width=True):
-                                st.markdown(st.session_state['selected_conversation_id'][3])
                     except:
                         st.warning("Choose a conversation first!")
 
                 with col_2:
-                    if st.button("Switch", key='switch_prompt_template'):
+                    if st.button("Switch", key='switch_prompt_template_system'):
                         if st.session_state["title_prompt_template"] == "Normal QA":
                             st.session_state["prompt_template"] = PROMPT_TEMPLATE
                             st.session_state["title_prompt_template"] = "Chat with document"
-
                         elif st.session_state["title_prompt_template"] == "Chat with document":
-                            try:
-                                st.session_state["prompt_template"] = st.session_state['selected_conversation_id'][3]
-                                st.session_state["title_prompt_template"] = "Instruction of folder"
-                            except:
-                                st.warning("There are no Project Folders!")
-
-                        elif st.session_state["title_prompt_template"] == "Instruction of folder":
                             st.session_state["prompt_template"] = " "
                             st.session_state["title_prompt_template"] = "Normal QA"
                         st.rerun()
@@ -474,102 +476,239 @@ if st.session_state["authenticated"]:
 
             with st.sidebar:
                 st.info(f"Nice to meet you: {st.session_state['user_name']}", icon=":material/sentiment_satisfied:")
-                st.session_state["conversations_user_text"] = sql_conn.get_conversation_session_user_textfile(st.session_state["user_id"])
-                st.header("UpLoad Your Documents", divider='orange')
-                uploaded_file = st.file_uploader("Choose a file", type=["pdf", "docx"])
+                #st.session_state["conversations_user_text"] = sql_conn.get_conversation_session_user_textfile(st.session_state["user_id"])
+                st.header("Create Folder Project", divider='orange')
 
-                # Kiểm tra nếu người dùng chọn file
-                if uploaded_file is not None:
-                    # Xác định URL của endpoint FastAPI và user_id
-                    upload_file_endpoint = os.getenv("UPLOAD_DATA")
+                # Tạo folder của user
+                @st.dialog("Create Folder", width="large")
+                def create_folder():
+                    folder_name = st.text_input("Name of the folder:", placeholder="New folder")
+                    if len(folder_name) == 0:
+                        folder_name = "New folder"
+                    # Thêm prompt
+                    prompt = st.text_area("""Project Context & Instructions:\n
+This will be appended to the system instruction for all chats in this project. 
+Note that this does not override, but "appended" on top of the global system instruction and agent-specific instructions.""",
+                                          max_chars=5000)
 
-                    if st.button(label="Upload File", icon=":material/upload_file:"):
-                        # Gửi POST request với file trực tiếp từ Streamlit lên FastAPI
-                        with st.spinner("Uploading..."):
-                            try:
-                                # Định nghĩa multipart-form cho file và các thông tin khác
-                                files = {"file": (uploaded_file.name, uploaded_file, "application/pdf")}
-                                data = {"user_id": st.session_state["user_id"]}
+                    # Upload file
+                    uploaded_file = st.file_uploader("Choose a file", type=["pdf", "docx"], key="user_upload_file")
 
-                                # Gửi request lên FastAPI
-                                response = requests.post(upload_file_endpoint, files=files, data=data)
+                    create_folder_button = st.button(key="Create folder user", icon=":material/create_new_folder:", label="")
+                    # Kiểm tra nếu người dùng chọn file
+                    if uploaded_file is not None:
+                        upload_file_endpoint = os.getenv("UPLOAD_DATA")
+                        if create_folder_button:
+                            # Gửi POST request với file trực tiếp từ Streamlit lên FastAPI
+                            with st.spinner("Creating..."):
+                                try:
+                                    folder_id = "fd" + datetime.now().strftime("%Y%m%d%H%m") + secrets.token_hex(3)
+                                    sql_conn.add_folder_user(folder_id, folder_name, st.session_state["user_id"],
+                                                             prompt=prompt)
+                                    # Định nghĩa multipart-form cho file và các thông tin khác
+                                    files = {"file": (uploaded_file.name, uploaded_file)}  # , "application/pdf"
+                                    data = {
+                                            "user_id": st.session_state["user_id"],
+                                            "folder_id": folder_id
+                                            }
+                                    # Gửi request lên FastAPI
+                                    response = requests.post(upload_file_endpoint, files=files, data=data)
 
-                                # Hiển thị phản hồi
-                                if response.status_code == 200:
-                                    st.success(response.json())
-                                else:
-                                    st.error(f"Failed to upload file. Error {response.status_code}: {response.text}")
-                            except:
-                                st.warning("Incorrect API key provided, please make sure your API key is correct!")
-                        # Update lai retriever
-                        st.session_state["update_retriever"] = True
-                        if st.session_state["update_retriever"]:
-                            retriever_status = get_retriever(st.session_state["user_id"],
-                                                             st.session_state["admin_department"])
-                        st.markdown(retriever_status)
-                        st.session_state["update_retriever"] = False
+                                    # Hiển thị phản hồi
+                                    if response.status_code == 200:
+                                        st.success(response.json())
+                                    else:
+                                        st.error(
+                                            f"Failed to upload file. Error {response.status_code}: {response.text}. Please check your API key!")
+                                except:
+                                    st.warning("Incorrect API key provided, please make sure your API key is correct!")
+                            # Update lai retriever
+                            st.session_state["update_retriever"] = True
+                            if st.session_state["update_retriever"]:
+                                retriever_status = get_retriever(st.session_state["user_id"],
+                                                                 st.session_state["admin_department"], folder_id)
+                            st.session_state["update_retriever"] = False
 
-                # Hiển thị danh sách các file đã upload
-                st.markdown("Uploaded Documents:")
-                files = sql_conn.get_files_textfile(st.session_state["user_id"])
+                            time.sleep(2)
+                            st.session_state["add_folder"] = False
+                            st.rerun()
+                    else:
+                        if create_folder_button:
+                            folder_id = "fd" + datetime.now().strftime("%Y%m%d%H%m") + secrets.token_hex(3)
+                            sql_conn.add_folder_user(folder_id, folder_name, st.session_state["user_id"],
+                                                     prompt=prompt)
+                            st.session_state["add_folder"] = False
+                            st.rerun()
 
-                if files:
-                    i = 0
-                    for file_name, size in files:
-                        col1, col2 = st.columns([2, 1])
-                        with col1:
-                            st.markdown(f"📄 {file_name} ({size:.2f} MB)", unsafe_allow_html=True)
-                        with col2:
-                            delete_file_endpoint = os.getenv("DELETE_FILE")
-                            if st.button(label="", icon=":material/delete:", key=i+1, use_container_width=True):
-                                data = {"file_name": file_name, "user_id": st.session_state["user_id"]}
-                                response = requests.delete(delete_file_endpoint, json=data)
-                                st.success(f"{file_name} deleted successfully!")
+                if st.button(label="Create Folder", icon=":material/create_new_folder:", key="create_folder_user",
+                             use_container_width=True):
+                    create_folder()
 
-                                # Update lai retriever
-                                st.session_state["update_retriever"] = True
-                                if st.session_state["update_retriever"]:
-                                    retriever_status = get_retriever(st.session_state["user_id"],
-                                                                     st.session_state["admin_department"])
-                                st.markdown(retriever_status)
-                                st.session_state["update_retriever"] = False
-
-                                st.rerun()
-                        i = i + 1
-                else:
-                    st.write("No files uploaded yet.")
-
-                st.header("Conversations", divider='orange')
-                # Thêm tùy chọn để tạo cuộc hội thoại mới
-                st.session_state["create_new_conversation"] = True
-                if "create_new_conversation" in st.session_state and st.session_state["create_new_conversation"]:
-                    conversation_name = "New conversation"
-                    type="text_file"
-                    if st.button("Create new conversation", icon=":material/add_box:", use_container_width=True):
-                        # Tạo một phiên hội thoại mới với loại conversation đã chọn
-                        sql_conn.create_conversation(conversation_name, st.session_state["user_id"], type)
-                        # # Lấy danh sách các phiên hội thoại
-                        st.session_state["conversations_user_text"] = sql_conn.get_conversation_session_user_textfile(st.session_state["user_id"])
-                        st.session_state["create_new_conversation"] = False
-                        st.rerun()
-                
                 st.write("---")
-                # Thêm menu chọn Conversation vào sidebar
-                if "conversations_user_text" in st.session_state:
-                    for conv in st.session_state["conversations_user_text"]:
-                        conversation_col, delete_col = st.columns([5, 1])
-                        with conversation_col:
-                            # Duyệt qua toàn bộ danh sách hội thoại với User Data và hiển thị dưới dạng nút
-                            if st.button(f"{conv[1]}", icon=":material/chat:", key=f"user_{conv[0]}", use_container_width=True):
-                                st.session_state["selected_conversation_id"] = conv[0]
-                        with delete_col:
-                            if st.button(label="", icon=":material/delete:", key="delete"+f'{conv[0]}', use_container_width=True):
-                                sql_conn.delete_conversation(conv[0])
-                                st.session_state["conversations_user_text"] = sql_conn.get_conversation_session_user_textfile(st.session_state["user_id"])
-                                st.rerun()
+                st.session_state["folders_user"] = sql_conn.get_folders_user(st.session_state["user_id"])
 
-                else:
-                    st.warning("No user conversation sessions available.")
+                # Lấy ra tất cả conversation id
+                st.session_state["conversations_user_text"] = []
+                for folder in st.session_state["folders_user"]:
+                    with st.expander(folder[1]):
+
+                        # Create conversation
+                        col_1, col_2, col_3 = st.columns([1, 1, 1])
+                        with col_1:
+                            st.session_state["create_new_conversation"] = True
+                            con_type = "text_file"
+                            if st.session_state["create_new_conversation"]:
+                                conversation_name = "New conversation"
+                                if st.button(label="", icon=":material/add_box:",
+                                             key="create_conversation_user" + f"{folder[0]}", use_container_width=True):
+                                    sql_conn.create_conversation(conversation_name, folder[0], con_type)
+                                    # # Lấy danh sách các phiên hội thoại
+                                    st.session_state[f"conversations_user_{folder[0]}"] = sql_conn.get_conversation_session_user_textfile(folder[0])
+
+                                    st.session_state["create_new_conversation"] = False
+                                    st.rerun()
+                        # Cột edit folder
+                        with col_2:
+                            @st.dialog("Edit your folder", width="large")
+                            def edit_user_folder(folder):
+                                new_name = st.text_input("Name of the folder:", placeholder=folder[1],
+                                                         key="edit" + f"{folder[0]}faku")
+                                new_prompt = st.text_area("Project Context & Instructions:",
+                                                          key="text_area" + f"{folder[0]}", max_chars=10000,
+                                                          placeholder=folder[2])
+
+                                # nếu user không nhập nội dung mới mà lỡ bấm save thì vẫn giữ nguyên nội dung cũ
+                                if len(new_name) == 0:
+                                    new_name = folder[1]
+                                if len(new_prompt) == 0:
+                                    new_prompt = folder[2]
+
+                                # Xóa file nếu muốn
+                                files = sql_conn.get_folder_files_user(folder[0])
+                                i = 0
+                                for file_name, size in files:
+                                    col1, col2 = st.columns([5, 1])
+                                    with col1:
+                                        st.markdown(f"📄 {file_name} ({size:.2f} MB)", unsafe_allow_html=True)
+                                    with col2:
+                                        delete_user_file_endpoint = os.getenv("DELETE_FILE")
+                                        if st.button(label="", icon=":material/delete:", key=i + 1,
+                                                     use_container_width=True):
+                                            delete_data = {
+                                                "file_name": file_name,
+                                                "user_id": st.session_state["user_id"],
+                                                "folder_id": folder[0]
+                                            }
+                                            response = requests.delete(delete_user_file_endpoint, json=delete_data)
+                                            st.success(f"{file_name} deleted successfully!")
+
+                                            # Update lai retriever
+                                            st.session_state["update_retriever"] = True
+                                            if st.session_state["update_retriever"]:
+                                                retriever_status = get_retriever(st.session_state["user_id"],
+                                                                                 st.session_state["admin_department"], folder[0])
+                                            st.markdown(retriever_status)
+                                            st.session_state["update_retriever"] = False
+                                            st.rerun()
+
+                                    i += 1
+                                # Thêm file nếu muốn
+                                uploaded_file = st.file_uploader("Choose a file", type=["pdf", "docx"],
+                                                                 key="upuserfile" + folder[0])
+                                # Kiểm tra nếu người dùng chọn file
+                                if uploaded_file is not None:
+                                    upload_file_endpoint = os.getenv("UPLOAD_DATA")
+
+                                    if st.button(label="Add document", icon=":material/upload:",
+                                                 key="add_document"+folder[0]):
+                                        # Gửi POST request với file trực tiếp từ Streamlit lên FastAPI
+                                        with st.spinner("Adding..."):
+                                            # Định nghĩa multipart-form cho file và các thông tin khác
+                                            files = {"file": (uploaded_file.name, uploaded_file)}  # , "application/pdf"
+                                            data = {"user_id": st.session_state["user_id"],
+                                                    "folder_id": folder[0]
+                                                    }
+
+                                            # Gửi request lên FastAPI
+                                            response = requests.post(upload_file_endpoint, files=files, data=data)
+
+                                            # Hiển thị phản hồi
+                                            if response.status_code == 200:
+                                                st.success(response.json())
+                                            else:
+                                                st.error(
+                                                    f"Failed to upload file. Error {response.status_code}: {response.text}")
+
+                                        # Update lai retriever
+                                        st.session_state["update_retriever"] = True
+                                        if st.session_state["update_retriever"]:
+                                            retriever_status = get_retriever(st.session_state["user_id"],
+                                                                             st.session_state["admin_department"], folder[0])
+                                        st.session_state["update_retriever"] = False
+                                        time.sleep(1)
+                                        st.rerun()
+                                if st.button("Save", key="save folder user" + folder[0]):
+                                    sql_conn.update_folder_user(folder[0], new_name,
+                                                                prompt=new_prompt)
+
+                            if st.button(label="", icon=":material/edit:", key="edit_user_folder" + f"{folder[0]}",
+                                         use_container_width=True):
+                                edit_user_folder(folder)
+                        with col_3:
+                            delete_folder_endpoint = os.getenv("DELETE_FOLDER_USER")
+
+                            @st.dialog("Delete Folder")
+                            def delete_folder():
+                                st.markdown("Are you sure you want to delete this folder?")
+                                if st.button("Yes", icon=":material/folder_delete:",
+                                             key="delete this folder" + f"{folder[0]}"):
+                                    delete_folder_data = {"folder_id": folder[0],
+                                                          "user_id": st.session_state["user_id"]}
+                                    response = requests.delete(delete_folder_endpoint, json=delete_folder_data)
+                                    st.success(f"Folder {folder[1]} deleted successfully!")
+
+                                    # Update lai retriever
+                                    st.session_state["update_retriever"] = True
+                                    if st.session_state["update_retriever"]:
+                                        retriever_status = get_retriever(st.session_state["user_id"],
+                                                                         st.session_state["admin_department"],
+                                                                         folder[0])
+                                    st.session_state["update_retriever"] = False
+
+                                    st.rerun()
+                            if st.button(label="", icon=":material/delete:", key="delete" + f"{folder[0]}",
+                                         use_container_width=True):
+                                delete_folder()
+
+
+                        # All conversations
+                        st.session_state[f"conversations_user_{folder[0]}"] = sql_conn.get_conversation_session_user_textfile(folder[0])
+                        # Correct way to populate the conversation IDs
+                        st.session_state["conversations_user_text"].extend([i[0] for i in st.session_state[f"conversations_user_{folder[0]}"]])
+
+                        # Hiển thị conversation của folder đó
+                        if f"conversations_user_{folder[0]}" in st.session_state:
+                            for conv in st.session_state[f"conversations_user_{folder[0]}"]:
+                                conversation_col, option_col = st.columns([5, 1])
+                                with conversation_col:
+                                    # Duyệt qua toàn bộ danh sách hội thoại với System và hiển thị dưới dạng nút
+                                    if st.button(f"{conv[1]}", icon=":material/chat:", key=f"user_{folder[0]}_{conv[0]}"
+                                                 , use_container_width=True):
+                                        st.session_state["selected_conversation_id"] = (conv[0], folder[0], folder[1],
+                                                                                        folder[2])
+                                with option_col:
+                                    if st.button(label="", icon=":material/delete:", key="delete" + f'{conv[0]}'):
+                                        sql_conn.delete_conversation(conv[0])
+                                        st.session_state[f"conversations_user_{folder[0]}"] = sql_conn.get_conversation_session_user_textfile(folder[0])
+                                        st.session_state["conversations_user_text"].remove(conv[0])
+                                        st.rerun()
+                        else:
+                            st.warning("No system conversation sessions available.")
+                            # Cần check lại cái này vì nó sẽ lưu prompt và title của folder cuối cùng
+                        if "prompt_template" not in st.session_state:
+                            st.session_state[f"prompt_template_{folder[0]}"] = folder[2]
+                        if "title_prompt_template" not in st.session_state:
+                            st.session_state[f"title_prompt_template_{folder[0]}"] = "Instruction of folder " + f"{folder[1]}"
 
             st.session_state.model = 'gpt-4o-mini'
             col1, col2, col3 = st.columns([1.15, 5, 2], vertical_alignment="top")
@@ -588,9 +727,8 @@ if st.session_state["authenticated"]:
             css_col1 = float_css_helper(top="70px")
             col1.float(css_col1)
 
-            # question = st.chat_input("What do you want to know?")
             with col2:
-                if "selected_conversation_id" in st.session_state and st.session_state["selected_conversation_id"] not in [i[0] for i in st.session_state["conversations_user_text"]]:
+                if "selected_conversation_id" in st.session_state and st.session_state["selected_conversation_id"][0] not in st.session_state["conversations_user_text"]:
                         del st.session_state["selected_conversation_id"]
                         del st.session_state["messages"]
                 chat_input_container = st.container()
@@ -607,7 +745,7 @@ if st.session_state["authenticated"]:
                         st.session_state.messages = []
 
                     if "selected_conversation_id" in st.session_state:
-                        chat_history = sql_conn.get_chat_history(st.session_state["selected_conversation_id"])
+                        chat_history = sql_conn.get_chat_history(st.session_state["selected_conversation_id"][0])
                         st.session_state.messages = []
                         # Cập nhật tin nhắn vào session_state.messages nếu có lịch sử
                         if chat_history:
@@ -632,10 +770,11 @@ if st.session_state["authenticated"]:
                                 assistant_message = st.empty()
 
                                 prompt_template = st.session_state["prompt_template_user"]
-                                response_stream = handler_input(
-                                    question, st.session_state["selected_conversation_id"],
+                                response_stream = handler_input_user(
+                                    question, st.session_state["selected_conversation_id"][0],
                                     st.session_state["user_id"], USER_URL, st.session_state.model, prompt_template,
-                                    st.session_state["admin_department"])
+                                    st.session_state["admin_department"], st.session_state["selected_conversation_id"][1],
+                                    st.session_state["selected_conversation_id"][3])
 
                                 # Stream and display the assistant's response
                                 output = ""
@@ -649,11 +788,11 @@ if st.session_state["authenticated"]:
                                 st.warning("Please provide your api key first!")
                             else:
                                 sender = ['human', 'ai']
-                                sql_conn.insert_chat(st.session_state["selected_conversation_id"], sender[0], question)
-                                sql_conn.insert_chat(st.session_state["selected_conversation_id"], sender[1], output)
+                                sql_conn.insert_chat(st.session_state["selected_conversation_id"][0], sender[0], question)
+                                sql_conn.insert_chat(st.session_state["selected_conversation_id"][0], sender[1], output)
                             
                             # Đổi tên conversation nêu tên vẫn còn là new conversation
-                            conversation_name = sql_conn.get_conversation_name_from_conversationid(st.session_state["selected_conversation_id"])
+                            conversation_name = sql_conn.get_conversation_name_from_conversationid(st.session_state["selected_conversation_id"][0])
                             if conversation_name == "New conversation":
                                 rename_conversation_endpoint = os.getenv("RENAME_CONVERSATION")
                                 data_for_rename = {
@@ -661,9 +800,9 @@ if st.session_state["authenticated"]:
                                     "admin_department": st.session_state["admin_department"]
                                 }
                                 new_name = requests.post(rename_conversation_endpoint, json=data_for_rename)
-                                sql_conn.change_conversation_name(st.session_state["selected_conversation_id"],
-                                                                         new_name.json().strip('"'))
-                                st.session_state["conversations_user_text"] = sql_conn.get_conversation_session_user_textfile(st.session_state["user_id"])
+                                sql_conn.change_conversation_name(st.session_state["selected_conversation_id"][0],
+                                                                  new_name.json().strip('"'))
+                                st.session_state["conversations_user_text"] = sql_conn.get_conversation_session_user_textfile(st.session_state["selected_conversation_id"][1])
                                 st.rerun()
                     else:
                         st.warning("Please select a conversation first!")
@@ -690,52 +829,8 @@ if st.session_state["authenticated"]:
                         elif st.session_state["title_prompt_template_user"] == "Chat with document":
                             st.session_state["prompt_template_user"] = " "
                             st.session_state["title_prompt_template_user"] = "Normal QA"
-                    # if st.button("Use prompt", key='use_Normal_Question_Answer'):
-                    #     st.session_state["prompt_template_user"] = " "
-                    #     st.session_state["title_prompt_template_user"] = "Normal QA"
                         st.rerun()
-                # st.markdown("Your Prompt Template:")
-                # with st.container(height=430, border=True):
-                #     prompts = sql_conn.get_prompt_template(st.session_state["user_id"])
-                #     for prompt_id, title, prompt_text in prompts:
-                #         col_a, col_b, col_c = st.columns([5, 2.5, 1])
-                #         with col_a:
-                #             with st.popover(f"{title}", use_container_width=True):
-                #                 st.markdown(f"{prompt_text}")
-                #         with col_b:
-                #             if st.button("Use prompt", key='use'+prompt_id):
-                #                 st.session_state["prompt_template_user"] = prompt_text
-                #                 st.session_state["title_prompt_template_user"] = title
-                #                 st.rerun()
-                #         with col_c:
-                #             if st.button(label="", icon=":material/delete:", key=prompt_id, use_container_width=True):
-                #                 sql_conn.delete_prompt_template(prompt_id)
-                #                 st.rerun()
             col3.float()
-
-        # def Prompt_Session():
-        #     st.markdown("Hello this is where you create your prompt template")
-        #     if st.button(label="Add Prompt", icon=":material/add:"):
-        #         st.session_state["add_prompt"] = True
-
-        #     # Nếu nhấn nút "Create New Conversation", hiển thị hộp nhập để người dùng nhập tên hội thoại
-        #     if "add_prompt" in st.session_state and st.session_state["add_prompt"]:
-        #         title = st.text_input("Prompt Title:")
-        #         prompt = st.text_area("Prompt:")
-        #         if st.button(label="Add", icon=":material/add:"):
-        #             if len(title) == 0:
-        #                 st.warning("Title must not be empty!")
-        #             elif len(prompt) == 0:
-        #                 st.warning("Prompt message must not be empty!")
-        #             else:
-        #                 add_prompt_endpoint = os.getenv("ADD_PROMPT_TEMPLATE")
-        #                 data = {"title": title, "prompt_text": prompt, "user_id": st.session_state["user_id"]}
-        #                 response = requests.post(add_prompt_endpoint, json=data)
-        #                 if response.status_code == 200:
-        #                     st.success("Add prompt successfully!")
-        #                     st.session_state["add_prompt"] = False
-        #                 else:
-        #                     st.error(f"Failed to add prompt. Error {response.status_code}: {response.text}")
 
         def Chat_With_CSVFile():
             with st.sidebar:
@@ -1029,7 +1124,7 @@ if st.session_state["authenticated"]:
                             try:
                                 folder_id = "fd" + datetime.now().strftime("%Y%m%d%H%m") + secrets.token_hex(3)
                                 sql_conn.add_folder(folder_id, folder_name, st.session_state["admin_department"],
-                                                    prompt="__Instruction__: "+prompt)
+                                                    prompt=prompt)
                                 # Định nghĩa multipart-form cho file và các thông tin khác
                                 files = {"file": (uploaded_file.name, uploaded_file)} #, "application/pdf"
                                 data = {"admin_department": st.session_state["admin_department"],
@@ -1058,7 +1153,7 @@ if st.session_state["authenticated"]:
                     if create_folder_button:
                         folder_id = "fd" + datetime.now().strftime("%Y%m%d%H%m") + secrets.token_hex(3)
                         sql_conn.add_folder(folder_id, folder_name, st.session_state["admin_department"],
-                                            prompt="__Instruction__: " + prompt)
+                                            prompt=prompt)
                         st.session_state["add_folder"] = False
                         st.rerun()
             st.write("---")
@@ -1147,14 +1242,14 @@ if st.session_state["authenticated"]:
                                     time.sleep(2)
                                     st.rerun()
                             if st.button("Save", key="save folder"+folder[0]):
-                                sql_conn.update_folder(folder[0], new_name, prompt="__Instruction__: "+new_prompt)
+                                sql_conn.update_folder(folder[0], new_name, prompt=new_prompt)
                                 st.rerun()
 
                         if st.button(label="", icon=":material/edit:", key="edit"+f"{folder[0]}",  use_container_width=True):
                             edit(folder)
 
                     with col3:
-                        delete_file_endpoint = os.getenv("DELETE_FOLDER")
+                        delete_file_endpoint = os.getenv("DELETE_FOLDER_ADMIN")
                         if st.button(label="", icon=":material/delete:", key="delete"+f"{folder[0]}", use_container_width=True):
                             data = {"folder_id": folder[0], "admin_department": st.session_state["admin_department"]}
                             response = requests.delete(delete_file_endpoint, json=data)

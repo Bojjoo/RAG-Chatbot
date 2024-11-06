@@ -2,12 +2,12 @@ from api.services import *
 
 
 class VectorStore:
-    def __init__(self, user_id=None, openai_embedding_key=None):
+    def __init__(self, user_id=None, folder_id=None, openai_embedding_key=None):
         self.text_splitter = RecursiveCharacterTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP,
                                                             length_function=len)
         self.model_embedding = OpenAIEmbeddings(model=MODEL_EMBEDDING, api_key=openai_embedding_key)
         try:
-            self.user_db = FAISS.load_local(f'{USER_DATABASE}/{user_id}', self.model_embedding,
+            self.user_db = FAISS.load_local(f'{USER_DATABASE}/{user_id}/{folder_id}', self.model_embedding,
                                             allow_dangerous_deserialization=True)
             self.user_retriever = self.user_db.as_retriever(search_kwargs=SEARCH_KWARGS, search_type=SEARCH_TYPE)
             documents = list(self.user_db.docstore._dict.values())
@@ -17,7 +17,6 @@ class VectorStore:
             self.user_db = None
             self.user_retriever = None
             self.user_bm25_retriever = None
-
 
     # For user
     def split_document(self, file_path):
@@ -43,13 +42,13 @@ class VectorStore:
         return db
 
     # thêm vào vectorstore
-    def merge_to_vectorstore(self, old_db, new_db, user_id):
+    def merge_to_vectorstore(self, old_db, new_db, user_id, folder_id):
         old_db.merge_from(new_db)
-        old_db.save_local(f'{USER_DATABASE}/{user_id}')
+        old_db.save_local(f'{USER_DATABASE}/{user_id}/{folder_id}')
         return old_db
 
     # xóa khỏi vectorstore theo id của chunks
-    def delete_from_vectorstore(self, file_name, user_id):
+    def delete_from_vectorstore(self, file_name, user_id, folder_id):
         # db_user, retriever_user = self.check_user_db(user_id)
         db_user = self.user_db
         docstore = db_user.docstore._dict
@@ -58,12 +57,12 @@ class VectorStore:
             if values.metadata['source'].endswith(f"{file_name}"):
                 key_delete.append(key)
         db_user.delete(key_delete)
-        db_user.save_local(f"{USER_DATABASE}/{user_id}")
-        os.remove(f"{USER_DOCUMENT}/{user_id}/{file_name}")
-        sql_conn.delete_file(file_name, user_id)
+        db_user.save_local(f"{USER_DATABASE}/{user_id}/{folder_id}")
+        os.remove(f"{USER_DOCUMENT}/{user_id}/{folder_id}/{file_name}")
+        sql_conn.delete_file(file_name, folder_id)
 
     # upload file và lưu vào vectorstore faiss, lưu file vào folder của conversation_id
-    def upload_file(self, file: UploadFile = File(...), user_id: str = Form(...)):
+    def upload_file(self, file: UploadFile = File(...), user_id: str = Form(...), folder_id: str = Form(...)):
         name = file.filename
         type = "text_file"
         if name.endswith('.pdf') or name.endswith('docx'):
@@ -71,11 +70,11 @@ class VectorStore:
             file.file.seek(0, os.SEEK_END)
             file_size = round(file.file.tell() / (1024 * 1024), 2)
             file.file.seek(0)
-            result = sql_conn.save_file_detail(file.filename, file_size, user_id, type)
+            result = sql_conn.save_file_detail(file.filename, file_size, folder_id, type)
             # Nếu result =1: thỏa mãn yêu cầu về total_size <50 và file_size <20
             if result == 1:
                 # Lưu file vào folder
-                folder_path = f"{USER_DOCUMENT}/{user_id}"
+                folder_path = f"{USER_DOCUMENT}/{user_id}/{folder_id}"
                 os.makedirs(folder_path, exist_ok=True)
 
                 with open(f"{folder_path}/{file.filename}", "wb") as buff:
@@ -87,10 +86,10 @@ class VectorStore:
                     try:
                         # Nếu đã có db, hợp nhất db cũ với db mới
                         db_user = self.user_db
-                        merged_db_user = self.merge_to_vectorstore(db_user, new_db_for_user, user_id)
+                        merged_db_user = self.merge_to_vectorstore(db_user, new_db_for_user, user_id, folder_id)
                         # return merged_db_user
                     except:  # Nếu chưa có db
-                        new_db_for_user.save_local(f'{USER_DATABASE}/{user_id}')
+                        new_db_for_user.save_local(f'{USER_DATABASE}/{user_id}/{folder_id}')
                         # return new_db_for_user
                     return f"Successfully uploaded {file.filename}, num_splits: {len(chunks)}"
                 except:
@@ -163,7 +162,7 @@ class VectorStoreAdmin:
         os.remove(f"{SYSTEM_DOCUMENT}/{admin_department}/{folder_id}/{file_name}")
         sql_conn.delete_file_admin(file_name, folder_id)
 
-    def upload_file(self, file: UploadFile = File(...), admin_department: str = Form(...),folder_id: str = Form(...)):
+    def upload_file(self, file: UploadFile = File(...), admin_department: str = Form(...), folder_id: str = Form(...)):
         name = file.filename
         if name.endswith('.pdf') or name.endswith('docx'):
             # Lấy ra file size

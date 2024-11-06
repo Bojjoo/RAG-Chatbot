@@ -9,30 +9,44 @@ def read_root():
 
 
 @router.post("/get_retriever/")
-def get_retriever(user_id: UserID):
-    user_vectorstore = VectorStore(user_id.user_id, openai_embedding_key=openai_embedding_apikey_cache[f"{user_id.admin_department}"])
+def get_retriever(user_folder: RetrievalUser):
+    user_vectorstore = VectorStore(user_folder.user_id, user_folder.folder_id,
+                                   openai_embedding_key=openai_embedding_apikey_cache[f"{user_folder.admin_department}"])
 
-    retriever_cache[f'{user_id.user_id}'] = user_vectorstore.user_retriever
-    vectorstore_cache[f'{user_id.user_id}'] = user_vectorstore.user_db
-    bm25_retriever_cache[f'{user_id.user_id}'] = user_vectorstore.user_bm25_retriever
+    try:
+        if retriever_cache[f'{user_folder.user_id}']:
+            retriever_cache[f'{user_folder.user_id}'].update(dict([(user_folder.folder_id, user_vectorstore.user_retriever)]))
+            vectorstore_cache[f'{user_folder.user_id}'].update(dict([(user_folder.folder_id, user_vectorstore.user_db)]))
+            bm25_retriever_cache[f'{user_folder.user_id}'].update(dict([(user_folder.folder_id, user_vectorstore.user_bm25_retriever)]))
+    except:
+        retriever_cache[f'{user_folder.user_id}'] = dict([(user_folder.folder_id, user_vectorstore.user_retriever)])
+        vectorstore_cache[f'{user_folder.user_id}'] = dict([(user_folder.folder_id, user_vectorstore.user_db)])
+        bm25_retriever_cache[f'{user_folder.user_id}'] = dict([(user_folder.folder_id, user_vectorstore.user_bm25_retriever)])
     if user_vectorstore.user_db is not None:
         return {"OK"}
     else:
         return {"None"}
 
 
-@router.post('/upload_data')
-async def upload_file(file: UploadFile = File(...), user_id: str = Form(...)):
+@router.delete("/delete_folder_user/")
+def delete_folder_user(folder: FolderUser):
+    user_id = folder.user_id
+    folder_id = folder.folder_id
+
+    if os.path.exists(f"./vectorstores/db_faiss_for_user/{user_id}/{folder_id}"):
+        shutil.rmtree(f"./vectorstores/db_faiss_for_user/{user_id}/{folder_id}")
+    if os.path.exists(f"./data/data_user/{user_id}/{folder_id}"):
+        shutil.rmtree(f"./data/data_user/{user_id}/{folder_id}")
+    sql_conn.delete_folder_user(folder_id)
+
+
+@router.post('/upload_data/')
+async def upload_file(file: UploadFile = File(...), user_id: str = Form(...), folder_id: str = Form()):
     admin_department = sql_conn.get_admin_department(user_id)
-    vectorstore = VectorStore(user_id, openai_embedding_key=openai_embedding_apikey_cache[f"{admin_department}"])
-    chunks = vectorstore.upload_file(file, user_id)
+    vectorstore = VectorStore(user_id, folder_id, openai_embedding_key=openai_embedding_apikey_cache[f"{admin_department}"])
+    chunks = vectorstore.upload_file(file, user_id, folder_id)
 
-    new_vectorstore = VectorStore(user_id, openai_embedding_key=openai_embedding_apikey_cache[f"{admin_department}"])
-
-    retriever_cache[f'{user_id}'] = new_vectorstore.user_retriever
-    vectorstore_cache[f'{user_id}'] = new_vectorstore.user_db
-    bm25_retriever_cache[f'{user_id}'] = new_vectorstore.user_bm25_retriever
-
+    new_vectorstore = VectorStore(user_id, folder_id, openai_embedding_key=openai_embedding_apikey_cache[f"{admin_department}"])
     return chunks
 
 
@@ -42,69 +56,50 @@ async def add_prompt_template(prompt_template: PromptTemplate):
 
 
 @router.post('/get_answer_about_users_data/')
-async def get_response(question_request: QuestionRequest):
-    try:
-        # With openai model
-        if question_request.model in model_openai:
-            bot = ChatBot(openai_apikey=apikeys_cache[f"{question_request.admin_department}"]["openaikey"],
-                          openai_embedding_key=openai_embedding_apikey_cache[f"{question_request.admin_department}"])
+async def get_answer_about_users_data(question_request: QuestionRequest):
+    # try:
+    if question_request.model in model_openai:
+        bot = ChatBot(
+            openai_apikey=apikeys_cache[question_request.admin_department]["openaikey"],
+            openai_embedding_key=openai_embedding_apikey_cache[question_request.admin_department]
+        )
+    else:
+        bot = ChatBot(
+            gemini_apikey=apikeys_cache[question_request.admin_department]["geminikey"],
+            openai_embedding_key=openai_embedding_apikey_cache[question_request.admin_department]
+        )
 
-            user_retriever = retriever_cache[f'{question_request.user_id}']
-            user_bm25_retriever = bm25_retriever_cache[f'{question_request.user_id}']
+    user_retriever = retriever_cache[f'{question_request.user_id}'][f'{question_request.folder_id}']
+    user_bm25_retriever = bm25_retriever_cache[f'{question_request.user_id}'][f'{question_request.folder_id}']
 
-            prompt = await bot.question_handler(user_retriever, user_bm25_retriever, question_request)
-            generator = bot.send_message_openai(prompt, question_request.model)
+    prompt = await bot.question_handler(user_retriever, user_bm25_retriever, question_request)
+    if question_request.model in model_openai:
+        generator = bot.send_message_openai(prompt, question_request.model)
+    else:
+        generator = bot.send_message_gemini(prompt, question_request.model)
 
-            return StreamingResponse(generator, media_type="text/event-stream")
+    return StreamingResponse(generator, media_type="text/event-stream")
 
-        # With gemini model
-        else:
-            bot = ChatBot(gemini_apikey=apikeys_cache[f"{question_request.admin_department}"]["geminikey"],
-                          openai_embedding_key=openai_embedding_apikey_cache[f"{question_request.admin_department}"])
-
-            user_retriever = retriever_cache[f'{question_request.user_id}']
-            user_bm25_retriever = bm25_retriever_cache[f'{question_request.user_id}']
-
-            prompt = await bot.question_handler(user_retriever, user_bm25_retriever, question_request)
-            generator = bot.send_message_gemini(prompt, question_request.model)
-
-            return StreamingResponse(generator, media_type="text/event-stream")
-
-    except:
-        return {"Error"}
+    # except:
+    #     return {"Error"}
 
 
 @router.post('/get_answer_about_system_data/')
-async def get_response(question_request: QuestionRequestSystem):
-    try:
-        # With openai model
-        if question_request.model in model_openai:
-            bot = ChatBot(openai_apikey=apikeys_cache[f"{question_request.admin_department}"]["openaikey"],
-                          openai_embedding_key=openai_embedding_apikey_cache[f"{question_request.admin_department}"])
+async def get_response(question_request: QuestionRequest) -> StreamingResponse:
+    bot = ChatBot(
+        openai_apikey=apikeys_cache[question_request.admin_department]["openaikey"] if question_request.model in model_openai else None,
+        gemini_apikey=apikeys_cache[question_request.admin_department]["geminikey"] if question_request.model in model_gemini else None,
+        openai_embedding_key=openai_embedding_apikey_cache[question_request.admin_department]
+    )
 
-            system_retriever = retriever_cache_admin[f'{question_request.admin_department}'][f'{question_request.folder_id}']
-            system_bm25_retriever = bm25_retriever_cache_admin[f'{question_request.admin_department}'][f'{question_request.folder_id}']
+    system_retriever = retriever_cache_admin[f'{question_request.admin_department}'][f'{question_request.folder_id}']
+    system_bm25_retriever = bm25_retriever_cache_admin[f'{question_request.admin_department}'][f'{question_request.folder_id}']
 
-            prompt = await bot.question_handler_system(system_retriever, system_bm25_retriever, question_request)
-            generator = bot.send_message_openai(prompt, question_request.model)
+    prompt = await bot.question_handler_system(system_retriever, system_bm25_retriever, question_request)
+    generator = bot.send_message_openai(prompt, question_request.model) if question_request.model in model_openai \
+        else bot.send_message_gemini(prompt, question_request.model)
 
-            return StreamingResponse(generator, media_type="text/event-stream")
-
-        # With gemini model
-        else:
-            bot = ChatBot(gemini_apikey=apikeys_cache[f"{question_request.admin_department}"]["geminikey"],
-                          openai_embedding_key=openai_embedding_apikey_cache[f"{question_request.admin_department}"])
-
-            system_retriever = retriever_cache_admin[f'{question_request.admin_department}'][f'{question_request.folder_id}']
-            system_bm25_retriever = bm25_retriever_cache_admin[f'{question_request.admin_department}'][f'{question_request.folder_id}']
-
-            prompt = await bot.question_handler_system(system_retriever, system_bm25_retriever, question_request)
-            generator = bot.send_message_gemini(prompt, question_request.model)
-
-            return StreamingResponse(generator, media_type="text/event-stream")
-
-    except:
-        return {"Error"}
+    return StreamingResponse(generator, media_type="text/event-stream")
 
 
 @router.post('/upload_CSV_file/')
@@ -166,16 +161,15 @@ async def get_csv_file(user_id: UserID):
 
 @router.delete("/delete_file/")
 def delete_file(file: FileDelete):
-    user_id = file.user_id
-    file_name = file.file_name
-    admin_department = sql_conn.get_admin_department(user_id)
-    vectorstore = VectorStore(user_id, openai_embedding_key=openai_embedding_apikey_cache[f"{admin_department}"])
+    admin_department = sql_conn.get_admin_department(file.user_id)
+    vectorstore = VectorStore(file.user_id, file.folder_id,
+                              openai_embedding_key=openai_embedding_apikey_cache[f"{admin_department}"])
 
     try:
-        vectorstore.delete_from_vectorstore(file_name, user_id)
-        retriever_cache[f'{user_id}'] = vectorstore.user_retriever
-        vectorstore_cache[f'{user_id}'] = vectorstore.user_db
-        bm25_retriever_cache[f'{user_id}'] = vectorstore.user_bm25_retriever
+        vectorstore.delete_from_vectorstore(file.file_name, file.user_id, file.folder_id)
+        # retriever_cache[f'{user_id}'] = vectorstore.user_retriever
+        # vectorstore_cache[f'{user_id}'] = vectorstore.user_db
+        # bm25_retriever_cache[f'{user_id}'] = vectorstore.user_bm25_retriever
         return 1
     except:
         return 0
@@ -271,11 +265,6 @@ def delete_file_admin(file: FileDeleteAdmin):
     file_name = file.file_name
     folder_id = file.folder_id
     vectorstore = VectorStoreAdmin(admin_department, folder_id, openai_embedding_key=openai_embedding_apikey_cache[f"{admin_department}"])
-
-    retriever_cache_admin[f'{admin_department}'].update(dict([(folder_id, vectorstore.admin_retriever)]))
-    vectorstore_cache_admin[f'{admin_department}'].update(dict([(folder_id, vectorstore.admin_db)]))
-    bm25_retriever_cache_admin[f'{admin_department}'].update(dict([(folder_id, vectorstore.admin_bm25_retriever)]))
-
     try:
         vectorstore.delete_from_vectorstore(file_name, admin_department, folder_id)
         return 1
@@ -283,7 +272,7 @@ def delete_file_admin(file: FileDeleteAdmin):
         return 0
 
 
-@router.delete("/delete_folder/")
+@router.delete("/delete_folder_admin/")
 def delete_folder(folder: Folder):
     admin_department = folder.admin_department
     folder_id = folder.folder_id

@@ -10,7 +10,7 @@ import os
 import shutil
 
 
-openai_embedding_apikey_cache ={}
+openai_embedding_apikey_cache = {}
 apikeys_cache = {}
 router = APIRouter()
 
@@ -43,16 +43,8 @@ class QuestionRequest(BaseModel):
     user_id: str
     model: str
     admin_department: str
-
-
-class QuestionRequestSystem(BaseModel):
-    question: str
-    conversation_id: str
-    user_id: str
-    model: str
-    admin_department: str
     folder_id: str
-    prompt: str
+    prompt_folder: str
 
 
 class UserID(BaseModel):
@@ -60,9 +52,16 @@ class UserID(BaseModel):
     admin_department: str
 
 
+class RetrievalUser(BaseModel):
+    user_id: str
+    folder_id: str
+    admin_department: str
+
+
 class FileDelete(BaseModel):
     file_name: str
     user_id: str
+    folder_id: str
 
 
 class PromptTemplate(BaseModel):
@@ -128,6 +127,11 @@ class FileDeleteAdmin(BaseModel):
 class Folder(BaseModel):
     folder_id: str
     admin_department: str
+
+
+class FolderUser(BaseModel):
+    folder_id: str
+    user_id: str
 
 
 class APIKey(BaseModel):

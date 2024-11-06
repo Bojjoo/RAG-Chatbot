@@ -11,8 +11,8 @@ class ChatBot:
         self.sender = ['human', 'ai']
 
     # Reformulate the question based on history
-    def reformulate_question(self, question, history):
-        remake_question_prompt = ChatPromptTemplate.from_messages(
+    async def reformulate_question(self, question, history):
+        reformulate_prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", REGENERATE_QUESTION_PROMPT),
                 ("system", "Chat history: \n {chat_history}\n"),
@@ -20,55 +20,44 @@ class ChatBot:
             ]
         )
 
-        question_pt = remake_question_prompt.format(chat_history=history, question=question)
-        new_question = self.model_reformulate_question.invoke(question_pt)
+        question_pt = reformulate_prompt.format(chat_history=history, question=question)
+        new_question = await self.model_reformulate_question.ainvoke(question_pt)
         return new_question.content
 
     # Retrieve relevant data
     async def retriever(self, question, retriever, bm25_retriever):
-        ensemble_retriever = EnsembleRetriever(retrievers=[bm25_retriever, retriever],
-                                               weights=[0.5, 0.5])
+        ensemble_retriever = EnsembleRetriever(retrievers=[bm25_retriever, retriever], weights=[0.5, 0.5])
 
         compressed_docs = await ensemble_retriever.ainvoke(question)
         content_text = "\n\n---\n\n".join([doc.page_content for doc in compressed_docs[:6]])
         return content_text
 
-    def prompt_rag(self, question, context, history, prompt_template):
+    def prompt_rag(self, question, context, history, prompt_template, prompt_folder):
         llm_prompt = ChatPromptTemplate.from_messages(
             [
-                ("system", prompt_template),
+                ("system", "Instruction 1:\n {prompt_folder}\n"),
+                ("system", "Instruction 2:\n {prompt_template}\n"),
                 ("system", "Chat history: \n {chat_history}\n"),
                 ("system", "Context about relevant data: \n"),
                 ("system", "{context}\n"),
-                ("system", "Answer the question base on the above context: {question}"),
+                ("system", "Answer the question: {question}"),
             ]
         )
-        prompt = llm_prompt.format(chat_history=history, context=context, question=question)
+        prompt = llm_prompt.format(prompt_folder=prompt_folder, prompt_template=prompt_template,
+                                   chat_history=history, context=context, question=question)
         return prompt
 
-    def prompt_user(self, question, history, prompt_template):
+    def prompt_normalqa(self, question, history, prompt_template, prompt_folder):
         llm_prompt = ChatPromptTemplate.from_messages(
             [
-                ("system", prompt_template),
+                ("system", "Instruction 1:\n {prompt_folder}\n"),
+                ("system", "Instruction 2:\n {prompt_template}\n"),
                 ("system", "Chat history: \n {chat_history}\n"),
                 ("system", "Answer the question: {question}"),
             ]
         )
-        prompt = llm_prompt.format(chat_history=history, question=question)
-        return prompt
-
-    def prompt_folder(self, question, context, history, prompt_template):
-        prompt_template = prompt_template.replace("{", "{{").replace("}", "}}")
-        llm_prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", prompt_template),
-                ("system", "Chat history: \n {chat_history}\n"),
-                ("system", "Context about relevant data: \n"),
-                ("system", "{context}\n"),
-                ("system", "Answer the question base on the above context and instruction: {question}"),
-            ]
-        )
-        prompt = llm_prompt.format(chat_history=history, context=context, question=question)
+        prompt = llm_prompt.format(prompt_folder=prompt_folder, prompt_template=prompt_template,
+                                   chat_history=history, question=question)
         return prompt
 
     # Handle all above elements --> prompt for llm
@@ -78,34 +67,36 @@ class ChatBot:
         # Nếu prompt template là system rag thì sử dụng retriever để retrieve data, còn không thì thôi
         if retriever:
             if question_request.prompt_template.startswith("__Rag__"):
-                new_question = self.reformulate_question(question_request.question, history)
+                new_question = await self.reformulate_question(question_request.question, history)
                 context = await self.retriever(new_question, retriever, bm25_retriever)
-                prompt = self.prompt_rag(new_question, context, history, question_request.prompt_template)
+                prompt = self.prompt_rag(new_question, context, history,
+                                         question_request.prompt_template, question_request.prompt_folder)
             else:
-                prompt = self.prompt_user(question_request.question, history, question_request.prompt_template)
+                prompt = self.prompt_normalqa(question_request.question, history,
+                                              question_request.prompt_template, question_request.prompt_folder)
             return prompt
         else:
-            prompt = self.prompt_user(question_request.question, history, question_request.prompt_template)
+            prompt = self.prompt_normalqa(question_request.question, history,
+                                          question_request.prompt_template, question_request.prompt_folder)
             return prompt
 
-    async def question_handler_system(self, retriever, bm25_retriever, question_request: QuestionRequestSystem):
+    async def question_handler_system(self, retriever, bm25_retriever, question_request: QuestionRequest):
         # Get history and generate new question
         history = sql_conn.get_chat_history_system(question_request.conversation_id)[-8::]
         # Nếu prompt template là system rag thì sử dụng retriever để retrieve data, còn không thì thôi
         if retriever:
             if question_request.prompt.startswith("__Rag__"):
-                new_question = self.reformulate_question(question_request.question, history)
+                new_question = await self.reformulate_question(question_request.question, history)
                 context = await self.retriever(new_question, retriever, bm25_retriever)
-                prompt = self.prompt_rag(new_question, context, history, question_request.prompt)
-            elif question_request.prompt.startswith("__Instruction__"):
-                new_question = self.reformulate_question(question_request.question, history)
-                context = await self.retriever(new_question, retriever, bm25_retriever)
-                prompt = self.prompt_folder(new_question, context, history, question_request.prompt)
+                prompt = self.prompt_rag(new_question, context, history,
+                                         question_request.prompt_template, question_request.prompt_folder)
             else:
-                prompt = self.prompt_user(question_request.question, history, question_request.prompt)
+                prompt = self.prompt_normalqa(question_request.question, history,
+                                              question_request.prompt_template, question_request.prompt_folder)
             return prompt
         else:
-            prompt = self.prompt_user(question_request.question, history, question_request.prompt)
+            prompt = self.prompt_normalqa(question_request.question, history,
+                                          question_request.prompt_template, question_request.prompt_folder)
             return prompt
 
     # Streaming response to fastapi endpoint
@@ -126,11 +117,10 @@ class ChatBot:
             callback.done.set()
         await task
 
-    def send_message_gemini(self, prompt: str, model: str) -> AsyncIterable[str]:
+    async def send_message_gemini(self, prompt: str, model: str) -> AsyncIterable[str]:
         self.model_llm = ChatGoogleGenerativeAI(temperature=TEMPERATURE, model=model, streaming=True,
                                                 api_key=self.gemini_apikey)
-        answer = self.model_llm.stream(prompt)
-        for i in answer:
+        async for i in self.model_llm.astream(prompt):
             yield i.content
     
     async def rename_conversation(self, history):

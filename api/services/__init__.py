@@ -50,16 +50,6 @@ class QuestionRequest(BaseModel):
     user_id: str
     model: str
     admin_department: str
-
-
-class QuestionRequestSystem(BaseModel):
-    question: str
-    conversation_id: str
-    user_id: str
-    model: str
-    admin_department: str
     folder_id: str
-    prompt: str
-
-
+    prompt_folder: str
 
