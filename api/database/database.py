@@ -30,8 +30,12 @@ class SQLDatabase:
         a = self.cur.fetchall()
         return a
     
-    def get_conversation_session_user_csvfile(self, user_id):#################################################
-        self.cur.execute(f"select conversation_id, conversation_name from conversations_user where user_id='{user_id}' and type='csv_file' order by start_time")
+    def get_conversation_session_user_csvfile(self, user_id):
+        self.cur.execute(f"""
+select conversation_id, conversation_name 
+from conversations_user cu join folders_user fu
+on cu.folder_id = fu.folder_id
+where fu.folder_id like 'u_csv_folder%' and user_id='{user_id}' and type='csv_file' order by start_time;""")
         a = self.cur.fetchall()
         return a
     
@@ -70,6 +74,13 @@ class SQLDatabase:
         self.cur.execute(
             f"""INSERT INTO conversations_user(conversation_id, conversation_name, folder_id, type)
             VALUES ('{conversation_id}', '{conversation_name}', '{folder_id}', '{type}')""")
+
+    def create_conversation_csvfile(self, conversation_name, user_id):
+        type = "csv_file"
+        conversation_id = "cv" + datetime.now().strftime("%Y%m%d%H%m") + secrets.token_hex(3)
+        self.cur.execute(
+                        f"""insert into conversations_user(conversation_id, conversation_name, folder_id, type)
+VALUES ('{conversation_id}', '{conversation_name}', (select folder_id from folders_user where user_id='{user_id}' and folder_id like 'u_csv_folder%'), '{type}')""")
     
     def create_conversation_system(self, conversation_name, user_id, folder_id):
         conversation_id = "cv" + datetime.now().strftime("%Y%m%d%H%m") + secrets.token_hex(3)
@@ -112,6 +123,13 @@ class SQLDatabase:
         query = "insert into folders_user(folder_id, folder_name, user_id, prompt) values(%s, %s, %s, %s)"
         self.cur.execute(query, (folder_id, folder_name, user_id, prompt))
 
+    def add_folder_user_csvfile(self, user_id):
+        folder_id = "u_csv_folder" + secrets.token_hex(4)
+        folder_name = f"{user_id} csv folder"
+        prompt = " "
+        query = "insert into folders_user(folder_id, folder_name, user_id, prompt) values(%s, %s, %s, %s)"
+        self.cur.execute(query, (folder_id, folder_name, user_id, prompt))
+
     # Xóa folder
     def delete_folder_user(self, folder_id):
         self.cur.execute(f"delete from messages_user where conversation_id in (select conversation_id from conversations_user where folder_id ='{folder_id}')")
@@ -121,7 +139,8 @@ class SQLDatabase:
 
     # Lấy ra các folder của user:
     def get_folders_user(self, user_id):
-        self.cur.execute(f"select folder_id, folder_name, prompt from folders_user where user_id='{user_id}'")
+
+        self.cur.execute(f"select folder_id, folder_name, prompt from folders_user where user_id='{user_id}' and folder_id like 'fd%'")
         return self.cur.fetchall()
 
     # Lấy ra các file trong folder đó:
@@ -312,3 +331,15 @@ class SQLDatabase:
         # query = "update folders set folder_name='{folder_name}', prompt='{prompt}' where folder_id='{folder_id}'"
         query = "update folders set folder_name=%s, prompt=%s where folder_id=%s"
         self.cur.execute(query, (folder_name, prompt, folder_id))
+
+    def add_template_folder(self, folder_id, template_text):
+        template_id = "tp" + datetime.now().strftime("%Y%m%d%H%m") + secrets.token_hex(3)
+        query = "insert into templates_folder(template_id, template_text, folder_id) values(%s, %s, %s)"
+        self.cur.execute(query, (template_id, template_text, folder_id))
+
+    def get_templates_folder(self, folder_id):
+        self.cur.execute(f"select template_id, template_text from templates_folder where folder_id = '{folder_id}'")
+        return self.cur.fetchall()
+
+    def delete_template_folder(self, template_id, folder_id):
+        self.cur.execute(f"delete from templates_folder where template_id = '{template_id}' and folder_id = '{folder_id}'")

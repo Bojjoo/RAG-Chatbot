@@ -85,7 +85,7 @@ class ChatBot:
         history = sql_conn.get_chat_history_system(question_request.conversation_id)[-8::]
         # Nếu prompt template là system rag thì sử dụng retriever để retrieve data, còn không thì thôi
         if retriever:
-            if question_request.prompt.startswith("__Rag__"):
+            if question_request.prompt_template.startswith("__Rag__"):
                 new_question = await self.reformulate_question(question_request.question, history)
                 context = await self.retriever(new_question, retriever, bm25_retriever)
                 prompt = self.prompt_rag(new_question, context, history,

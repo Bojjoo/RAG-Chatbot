@@ -160,6 +160,8 @@ if not st.session_state["authenticated"]:
                         response = requests.post(url=os.getenv("REGISTER_ACCOUNT"), json=register_data)
                         if response.json() == 1:
                             st.success("Account registered successfully! You can now log in.")
+                            user_id = sql_conn.get_userid_from_username(new_username)
+                            sql_conn.add_folder_user_csvfile(user_id)
                         else:
                             st.warning(f"The user name {new_username} is existed, please choose another user name!")
                     except Exception as e:
@@ -361,7 +363,7 @@ if st.session_state["authenticated"]:
                         del st.session_state["messages"]
                 chat_input_container = st.container()
                 with chat_input_container:
-                    question = st.chat_input("What do you want to know?")
+                    st.session_state["question"] = st.chat_input("What do you want to know?")
                 css_chat_input_container = float_css_helper(bottom="35px")
                 chat_input_container.float(css_chat_input_container)
                 
@@ -373,6 +375,7 @@ if st.session_state["authenticated"]:
                         st.session_state.messages = []
 
                     if "selected_conversation_id" in st.session_state:
+                        prompt_template = sql_conn.get_templates_folder(st.session_state["selected_conversation_id"][1])
                         chat_history = sql_conn.get_chat_history_system(st.session_state["selected_conversation_id"][0])
                         st.session_state.messages = []
                         # Cập nhật tin nhắn vào session_state.messages nếu có lịch sử
@@ -381,7 +384,22 @@ if st.session_state["authenticated"]:
                                 {"role": "user" if sender == "human" else "assistant", "output": message}
                                 for sender, message in chat_history
                             ]
-
+                            ##########################################
+                        else:
+                            try:
+                                pt_container = st.container()
+                                with pt_container:
+                                    cols = st.columns(len(prompt_template))
+                                    for i in range(len(prompt_template)):
+                                        with cols[i]:
+                                            if st.button(prompt_template[i][1]):
+                                                st.session_state["question"] = prompt_template[i][1]
+                                                st.rerun()
+                                pt_container_css = float_css_helper(bottom="200px")
+                                pt_container.float(pt_container_css)
+                            except:
+                                pass
+                            #########################################
                     # Hiển thị các tin nhắn trong phiên hội thoại đã chọn
                     if "messages" in st.session_state:
                         for message in st.session_state.messages:
@@ -390,16 +408,16 @@ if st.session_state["authenticated"]:
                     # try:
                     if "selected_conversation_id" in st.session_state:
                         # Gửi tin nhắn mới trong giao diện chat
-                        if question:
-                            st.chat_message("user").markdown(question)
-                            st.session_state.messages.append({"role": "user", "output": question})
+                        if st.session_state["question"]:
+                            st.chat_message("user").markdown(st.session_state["question"])
+                            st.session_state.messages.append({"role": "user", "output": st.session_state["question"]})
                             with st.chat_message("assistant"):
                                 assistant_message = st.empty()
 
                                 prompt = st.session_state["prompt_template"]
 
                                 response_stream = handler_input_system(
-                                               question, st.session_state["selected_conversation_id"][0],
+                                               st.session_state["question"], st.session_state["selected_conversation_id"][0],
                                                st.session_state["user_id"], SYSTEM_URL,
                                                st.session_state.model, st.session_state["admin_department"],
                                                st.session_state["selected_conversation_id"][1], prompt,
@@ -417,7 +435,7 @@ if st.session_state["authenticated"]:
                                 st.warning("Please provide your api key first!")
                             else:
                                 sender = ['human', 'ai']
-                                sql_conn.insert_chat_system(st.session_state["selected_conversation_id"][0], sender[0], question)
+                                sql_conn.insert_chat_system(st.session_state["selected_conversation_id"][0], sender[0], st.session_state["question"])
                                 sql_conn.insert_chat_system(st.session_state["selected_conversation_id"][0], sender[1], output)
                             # Đổi tên conversation nêu tên vẫn còn là new conversation
                             conversation_name = sql_conn.get_conversation_name_from_conversationid_system(
@@ -425,7 +443,7 @@ if st.session_state["authenticated"]:
                             if conversation_name == "New conversation":
                                 rename_conversation_endpoint = os.getenv("RENAME_CONVERSATION")
                                 data_for_rename = {
-                                    "history": f"(human:{question[:200]}); (ai: {output[:500]})",
+                                    "history": f"(human:{st.session_state['question'][:200]}); (ai: {output[:500]})",
                                     "admin_department": st.session_state["admin_department"]
                                 }
                                 new_name = requests.post(rename_conversation_endpoint, json=data_for_rename)
@@ -437,8 +455,8 @@ if st.session_state["authenticated"]:
                                 st.rerun()
                     else:
                         st.warning("Please select a conversation first!")
-                    css_chat_message_container = float_css_helper(bottom="80px", top="70px", overflow_y="auto")
-                    messages_container.float(css_chat_message_container)
+                css_chat_message_container = float_css_helper(bottom="80px", top="70px", overflow_y="auto")
+                messages_container.float(css_chat_message_container)
 
             with col3:
                 st.markdown(f'Prompt Template is using: {st.session_state["title_prompt_template"]}')
@@ -482,11 +500,11 @@ if st.session_state["authenticated"]:
                 # Tạo folder của user
                 @st.dialog("Create Folder", width="large")
                 def create_folder():
-                    folder_name = st.text_input("Name of the folder:", placeholder="New folder")
+                    folder_name = st.text_input("__Name of the folder:__", placeholder="New folder")
                     if len(folder_name) == 0:
                         folder_name = "New folder"
                     # Thêm prompt
-                    prompt = st.text_area("""Project Context & Instructions:\n
+                    prompt = st.text_area("""__Project Context & Instructions:__\n
 This will be appended to the system instruction for all chats in this project. 
 Note that this does not override, but "appended" on top of the global system instruction and agent-specific instructions.""",
                                           max_chars=5000)
@@ -529,7 +547,6 @@ Note that this does not override, but "appended" on top of the global system ins
                                                                  st.session_state["admin_department"], folder_id)
                             st.session_state["update_retriever"] = False
 
-                            time.sleep(2)
                             st.session_state["add_folder"] = False
                             st.rerun()
                     else:
@@ -537,6 +554,12 @@ Note that this does not override, but "appended" on top of the global system ins
                             folder_id = "fd" + datetime.now().strftime("%Y%m%d%H%m") + secrets.token_hex(3)
                             sql_conn.add_folder_user(folder_id, folder_name, st.session_state["user_id"],
                                                      prompt=prompt)
+                            # Update lai retriever
+                            st.session_state["update_retriever"] = True
+                            if st.session_state["update_retriever"]:
+                                retriever_status = get_retriever(st.session_state["user_id"],
+                                                                 st.session_state["admin_department"], folder_id)
+                            st.session_state["update_retriever"] = False
                             st.session_state["add_folder"] = False
                             st.rerun()
 
@@ -645,7 +668,6 @@ Note that this does not override, but "appended" on top of the global system ins
                                             retriever_status = get_retriever(st.session_state["user_id"],
                                                                              st.session_state["admin_department"], folder[0])
                                         st.session_state["update_retriever"] = False
-                                        time.sleep(1)
                                         st.rerun()
                                 if st.button("Save", key="save folder user" + folder[0]):
                                     sql_conn.update_folder_user(folder[0], new_name,
@@ -658,7 +680,7 @@ Note that this does not override, but "appended" on top of the global system ins
                             delete_folder_endpoint = os.getenv("DELETE_FOLDER_USER")
 
                             @st.dialog("Delete Folder")
-                            def delete_folder():
+                            def delete_folder(folder):
                                 st.markdown("Are you sure you want to delete this folder?")
                                 if st.button("Yes", icon=":material/folder_delete:",
                                              key="delete this folder" + f"{folder[0]}"):
@@ -678,7 +700,7 @@ Note that this does not override, but "appended" on top of the global system ins
                                     st.rerun()
                             if st.button(label="", icon=":material/delete:", key="delete" + f"{folder[0]}",
                                          use_container_width=True):
-                                delete_folder()
+                                delete_folder(folder)
 
 
                         # All conversations
@@ -848,13 +870,13 @@ Note that this does not override, but "appended" on top of the global system ins
                             try:
                                 # Định nghĩa multipart-form cho file và các thông tin khác
                                 files = {"file": (uploaded_file.name, uploaded_file)}
-                                data = {
+                                csv_data = {
                                     "user_id": st.session_state["user_id"],
                                     "admin_department": st.session_state["admin_department"]
                                 }
 
                                 # Gửi request lên FastAPI
-                                response = requests.post(upload_file_endpoint, files=files, data=data)
+                                response = requests.post(upload_file_endpoint, files=files, data=csv_data)
                                 st.session_state["csv_file"] = response.json()
                                 # Hiển thị phản hồi
                                 if response.status_code == 200:
@@ -873,12 +895,13 @@ Note that this does not override, but "appended" on top of the global system ins
                             st.markdown(f"📄 {file}", unsafe_allow_html=True)
                         with col2:
                             delete_file_endpoint = os.getenv("DELETE_CSV_FILE")
-                            if st.button(label="", icon=":material/delete:", key="delete"+f"{file}{i}", use_container_width=True):
-                                data = {"file_name": file,
+                            if st.button(label="", icon=":material/delete:", key="delete"+f"{file}{i}",
+                                         use_container_width=True):
+                                delete_file_data = {"file_name": file,
                                         "user_id": st.session_state["user_id"],
                                         "admin_department": st.session_state["admin_department"]
                                         }
-                                response = requests.delete(delete_file_endpoint, json=data)
+                                response = requests.delete(delete_file_endpoint, json=delete_file_data)
                                 st.session_state["csv_file"] = response.json()
                                 st.success(f"{file} deleted successfully!")
                                 st.rerun()
@@ -889,10 +912,9 @@ Note that this does not override, but "appended" on top of the global system ins
                 st.session_state["create_new_conversation"] = True
                 if "create_new_conversation" in st.session_state and st.session_state["create_new_conversation"]:
                     conversation_name = "New conversation"
-                    type="csv_file"
                     if st.button("Create new conversation", icon=":material/add_box:", use_container_width=True):
                         # Tạo một phiên hội thoại mới với loại conversation đã chọn
-                        sql_conn.create_conversation(conversation_name, st.session_state["user_id"], type)
+                        sql_conn.create_conversation_csvfile(conversation_name, st.session_state["user_id"])
                         # # Lấy danh sách các phiên hội thoại
                         st.session_state["conversations_user_csv"] = sql_conn.get_conversation_session_user_csvfile(st.session_state["user_id"])
                         st.session_state["create_new_conversation"] = False
@@ -1146,7 +1168,6 @@ Note that this does not override, but "appended" on top of the global system ins
                         if st.session_state["update_retriever"]:
                             retriever_status = get_retriever_admin(st.session_state["admin_department"], folder_id)
                         st.session_state["update_retriever"] = False
-                        time.sleep(2)
                         st.session_state["add_folder"] = False
                         st.rerun()
                 else:
@@ -1154,6 +1175,11 @@ Note that this does not override, but "appended" on top of the global system ins
                         folder_id = "fd" + datetime.now().strftime("%Y%m%d%H%m") + secrets.token_hex(3)
                         sql_conn.add_folder(folder_id, folder_name, st.session_state["admin_department"],
                                             prompt=prompt)
+                        # Update lai retriever
+                        st.session_state["update_retriever"] = True
+                        if st.session_state["update_retriever"]:
+                            retriever_status = get_retriever_admin(st.session_state["admin_department"], folder_id)
+                        st.session_state["update_retriever"] = False
                         st.session_state["add_folder"] = False
                         st.rerun()
             st.write("---")
@@ -1165,10 +1191,37 @@ Note that this does not override, but "appended" on top of the global system ins
                     col1, col2, col3 = st.columns([7, 1, 1])
                     with col1:
                         with st.expander(folder[1]):
-                            st.markdown(folder[2])
+                            st.markdown("__Instruction:__\n"+folder[2])
                             for file_name, size in files:
                                 st.markdown(f"📄 {file_name} ({size:.2f} MB)", unsafe_allow_html=True)
+                            st.write("---")
+                            if st.button(label="Add prompt template", icon=":material/add_notes:",
+                                         key=f"add_template_{folder[0]}"):
+                                st.session_state[f"add_template_folder"] = True
+                            if "add_template_folder" in st.session_state and st.session_state[f"add_template_folder"]:
+                                template_input_column, save_column = st.columns([5, 1])
+                                with template_input_column:
+                                    st.session_state[f"added_template_text_{folder[0]}"] = st.text_area(
+                                                                label="Prompt template:",
+                                                                key=f"add_prompt_template_{folder[0]}", max_chars=2000)
+                                with save_column:
+                                    if st.button("", icon=":material/add:", key=f"save_prompt_template_{folder[0]}"):
+                                        if st.session_state[f"added_template_text_{folder[0]}"] != "":
+                                            sql_conn.add_template_folder(folder[0], st.session_state[f"added_template_text_{folder[0]}"])
+                                        else:
+                                            st.warning("Empty prompt template won't be saved!")
+                                        st.session_state[f"add_template_folder"] = False
+                                        st.rerun()
 
+                            templates_folder = sql_conn.get_templates_folder(folder[0])
+                            for template in templates_folder:
+                                template_col, delete_template_col = st.columns([6, 1])
+                                with template_col:
+                                    st.markdown(template[1])
+                                with delete_template_col:
+                                    if st.button(label="", icon=":material/delete:", key=f"delete_template_{folder[0]}_{template[0]}"):
+                                        sql_conn.delete_template_folder(template[0], folder[0])
+                                        st.rerun()
                     with col2:
                         @st.dialog("Edit your folder", width="large")
                         def edit(folder):
@@ -1187,7 +1240,7 @@ Note that this does not override, but "appended" on top of the global system ins
                             files = sql_conn.get_folder_files(folder[0])
                             i = 0
                             for file_name, size in files:
-                                col1, col2 = st.columns([5,1])
+                                col1, col2 = st.columns([5, 1])
                                 with col1:
                                     st.markdown(f"📄 {file_name} ({size:.2f} MB)", unsafe_allow_html=True)
                                 with col2:

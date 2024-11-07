@@ -68,6 +68,13 @@ CREATE TABLE folders(
 	prompt varchar(10000)
 );
 
+CREATE TABLE templates_folder(
+    template_id varchar(20) primary key,
+    template_text varchar(2000) not null,
+    folder_id VARCHAR(20) REFERENCES folders(folder_id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE folder_files(
 	file_id varchar(20) primary key,
 	folder_id varchar(20) references folders(folder_id),
