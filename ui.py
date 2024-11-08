@@ -394,9 +394,10 @@ if st.session_state["authenticated"]:
                                         with cols[i]:
                                             if st.button(prompt_template[i][1]):
                                                 st.session_state["question"] = prompt_template[i][1]
+                                                pt_container.empty()
                                                 st.rerun()
-                                pt_container_css = float_css_helper(bottom="200px")
-                                pt_container.float(pt_container_css)
+                                    pt_container_css = float_css_helper(bottom="300px")
+                                    pt_container.float(pt_container_css)
                             except:
                                 pass
                             #########################################
@@ -594,11 +595,11 @@ Note that this does not override, but "appended" on top of the global system ins
                         with col_2:
                             @st.dialog("Edit your folder", width="large")
                             def edit_user_folder(folder):
-                                new_name = st.text_input("Name of the folder:", placeholder=folder[1],
+                                new_name = st.text_input("Name of the folder:", value=folder[1],
                                                          key="edit" + f"{folder[0]}faku")
                                 new_prompt = st.text_area("Project Context & Instructions:",
                                                           key="text_area" + f"{folder[0]}", max_chars=10000,
-                                                          placeholder=folder[2])
+                                                          value=folder[2])
 
                                 # nếu user không nhập nội dung mới mà lỡ bấm save thì vẫn giữ nguyên nội dung cũ
                                 if len(new_name) == 0:
@@ -1225,10 +1226,10 @@ Note that this does not override, but "appended" on top of the global system ins
                     with col2:
                         @st.dialog("Edit your folder", width="large")
                         def edit(folder):
-                            new_name = st.text_input("Name of the folder:", placeholder="New folder",
+                            new_name = st.text_input("Name of the folder:", value=folder[1],
                                                      key="edit"+f"{folder[0]}faku")
-                            new_prompt = st.text_area("Project Context & Instructions:", key="text_area"+f"{folder[0]}",
-                                                      max_chars=10000)
+                            new_prompt = st.text_area("Project Context & Instructions:", value=folder[2],
+                                                      key="text_area"+f"{folder[0]}", max_chars=10000)
                             
                             #nếu user không nhập nội dung mới mà lỡ bấm save thì vẫn giữ nguyên nội dung cũ
                             if len(new_name) == 0:

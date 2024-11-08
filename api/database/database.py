@@ -314,6 +314,7 @@ VALUES ('{conversation_id}', '{conversation_name}', (select folder_id from folde
         self.cur.execute(f"delete from messages_system where conversation_id in (select conversation_id from conversations_system where folder_id ='{folder_id}')")
         self.cur.execute(f"delete from conversations_system where conversation_id in (select conversation_id from conversations_system where folder_id ='{folder_id}')")
         self.cur.execute(f"delete from folder_files where folder_id = '{folder_id}'")
+        self.cur.execute(f"delete from templates_folder where folder_id = '{folder_id}'")
         self.cur.execute(f"delete from folders where folder_id = '{folder_id}'")
     
     # Lấy ra các folder của admin:
@@ -332,6 +333,7 @@ VALUES ('{conversation_id}', '{conversation_name}', (select folder_id from folde
         query = "update folders set folder_name=%s, prompt=%s where folder_id=%s"
         self.cur.execute(query, (folder_name, prompt, folder_id))
 
+    # Phần template folder
     def add_template_folder(self, folder_id, template_text):
         template_id = "tp" + datetime.now().strftime("%Y%m%d%H%m") + secrets.token_hex(3)
         query = "insert into templates_folder(template_id, template_text, folder_id) values(%s, %s, %s)"
