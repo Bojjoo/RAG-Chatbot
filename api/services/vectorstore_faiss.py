@@ -25,8 +25,6 @@ class VectorStore:
             loader = PyPDFLoader(file_path)
         elif file_extension == '.txt':
             loader = TextLoader(file_path)
-        elif file_extension == '.csv':
-            loader = CSVLoader(file_path)
         elif file_extension == '.docx':
             loader = UnstructuredWordDocumentLoader(file_path)
         else:
