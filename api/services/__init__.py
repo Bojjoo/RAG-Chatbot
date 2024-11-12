@@ -30,6 +30,9 @@ from fastapi import UploadFile, File, Form
 import shutil
 from langchain.retrievers.ensemble import EnsembleRetriever
 from langchain_community.retrievers import BM25Retriever
+from langchain_experimental.text_splitter import SemanticChunker
+import tiktoken
+
 
 from api.database.database import SQLDatabase
 
@@ -42,6 +45,8 @@ import pandas as pd
 
 sql_conn = SQLDatabase()
 
+# Counting token
+tokenizer = tiktoken.get_encoding("cl100k_base")
 
 class QuestionRequest(BaseModel):
     question: str

@@ -5,7 +5,7 @@ class VectorStore:
     def __init__(self, user_id=None, folder_id=None, openai_embedding_key=None):
         self.text_splitter = RecursiveCharacterTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP,
                                                             length_function=len)
-        self.model_embedding = OpenAIEmbeddings(model=MODEL_EMBEDDING, api_key=openai_embedding_key)
+        self.model_embedding = OpenAIEmbeddings(model=MODEL_EMBEDDING, api_key=openai_embedding_key, dimensions=3072)
         try:
             self.user_db = FAISS.load_local(f'{USER_DATABASE}/{user_id}/{folder_id}', self.model_embedding,
                                             allow_dangerous_deserialization=True)
@@ -19,7 +19,22 @@ class VectorStore:
             self.user_bm25_retriever = None
 
     # For user
-    def split_document(self, file_path):
+    def counting_token(self, file):
+        file_extension = os.path.splitext(file)[1].lower()
+        loaders = {
+            '.pdf': PyPDFLoader,
+            '.txt': TextLoader,
+            '.docx': UnstructuredWordDocumentLoader
+        }
+        if file_extension not in loaders:
+            raise ValueError("Unsupported file type")
+
+        loader = loaders[file_extension](file)
+        contexts = ''.join(doc.page_content for doc in loader.load())
+        tokens = tokenizer.encode(contexts)
+        return len(tokens), len(contexts)
+
+    def recursive_chunking(self, file_path):
         file_extension = os.path.splitext(file_path)[1].lower()
         if file_extension == '.pdf':
             loader = PyPDFLoader(file_path)
@@ -33,10 +48,27 @@ class VectorStore:
         chunks = self.text_splitter.split_documents(documents)
         return chunks
 
+    def semantic_chunking(self, file_path):
+        file_extension = os.path.splitext(file_path)[1].lower()
+        if file_extension == '.pdf':
+            loader = PyPDFLoader(file_path)
+        elif file_extension == '.txt':
+            loader = TextLoader(file_path)
+        elif file_extension == '.docx':
+            loader = UnstructuredWordDocumentLoader(file_path)
+        else:
+            raise ValueError("Unsupported file type")
+        documents = loader.load()
+
+        text_splitter = SemanticChunker(self.model_embedding, breakpoint_threshold_type='percentile',
+                                        breakpoint_threshold_amount=95)
+        chunks = text_splitter.create_documents(texts=[document.page_content for document in documents],
+                                                metadatas=[document.metadata for document in documents])
+        return chunks
+
     # Lưu vào vectorstore
     def create_vectorstore(self, chunks):
         db = FAISS.from_documents(chunks, self.model_embedding)
-        # db.save_local(USER_DATABASE)
         return db
 
     # thêm vào vectorstore
@@ -60,7 +92,8 @@ class VectorStore:
         sql_conn.delete_file(file_name, folder_id)
 
     # upload file và lưu vào vectorstore faiss, lưu file vào folder của conversation_id
-    def upload_file(self, file: UploadFile = File(...), user_id: str = Form(...), folder_id: str = Form(...)):
+    def upload_file(self, file: UploadFile = File(...), user_id: str = Form(...), folder_id: str = Form(...),
+                    semantic_chunking: bool = Form(...)):
         name = file.filename
         type = "text_file"
         if name.endswith('.pdf') or name.endswith('docx'):
@@ -77,7 +110,11 @@ class VectorStore:
 
                 with open(f"{folder_path}/{file.filename}", "wb") as buff:
                     shutil.copyfileobj(file.file, buff)
-                chunks = self.split_document(f"{folder_path}/{file.filename}")
+                # Chunking document
+                if semantic_chunking:
+                    chunks = self.semantic_chunking(f"{folder_path}/{file.filename}")
+                else:
+                    chunks = self.recursive_chunking(f"{folder_path}/{file.filename}")
                 # bỏ vào vectorstore mới
                 try:
                     new_db_for_user = self.create_vectorstore(chunks)
@@ -119,7 +156,7 @@ class VectorStoreAdmin:
             self.admin_retriever = None
             self.admin_bm25_retriever = None
 
-    def split_document(self, file_path):
+    def recursive_chunking(self, file_path):
         file_extension = os.path.splitext(file_path)[1].lower()
         if file_extension == '.pdf':
             loader = PyPDFLoader(file_path)
@@ -133,6 +170,24 @@ class VectorStoreAdmin:
             raise ValueError("Unsupported file type")
         documents = loader.load()
         chunks = self.text_splitter.split_documents(documents)
+        return chunks
+
+    def semantic_chunking(self, file_path):
+        file_extension = os.path.splitext(file_path)[1].lower()
+        if file_extension == '.pdf':
+            loader = PyPDFLoader(file_path)
+        elif file_extension == '.txt':
+            loader = TextLoader(file_path)
+        elif file_extension == '.docx':
+            loader = UnstructuredWordDocumentLoader(file_path)
+        else:
+            raise ValueError("Unsupported file type")
+        documents = loader.load()
+
+        text_splitter = SemanticChunker(self.model_embedding, breakpoint_threshold_type='percentile',
+                                        breakpoint_threshold_amount=95)
+        chunks = text_splitter.create_documents(texts=[document.page_content for document in documents],
+                                                metadatas=[document.metadata for document in documents])
         return chunks
 
     # Lưu vào vectorstore
@@ -160,7 +215,8 @@ class VectorStoreAdmin:
         os.remove(f"{SYSTEM_DOCUMENT}/{admin_department}/{folder_id}/{file_name}")
         sql_conn.delete_file_admin(file_name, folder_id)
 
-    def upload_file(self, file: UploadFile = File(...), admin_department: str = Form(...), folder_id: str = Form(...)):
+    def upload_file(self, file: UploadFile = File(...), admin_department: str = Form(...), folder_id: str = Form(...),
+                    semantic_chunking: bool = Form(...)):
         name = file.filename
         if name.endswith('.pdf') or name.endswith('docx'):
             # Lấy ra file size
@@ -175,8 +231,10 @@ class VectorStoreAdmin:
 
             with open(f"{folder_path}/{file.filename}", "wb") as buff:
                 shutil.copyfileobj(file.file, buff)
-            chunks = self.split_document(f"{folder_path}/{file.filename}")
-
+            if semantic_chunking:
+                chunks = self.semantic_chunking(f"{folder_path}/{file.filename}")
+            else:
+                chunks = self.recursive_chunking(f"{folder_path}/{file.filename}")
             # bỏ vào vectorstore mới
             try:
                 new_db_for_admin = self.create_vectorstore(chunks)
@@ -191,9 +249,9 @@ class VectorStoreAdmin:
 
                 return f"Successfully uploaded {file.filename}, num_splits: {len(chunks)}"
             except:
-                    sql_conn.delete_file_admin(file.filename, folder_id)
-                    return "Incorrect API key provided, please make sure your API key is correct!"
+                sql_conn.delete_file_admin(file.filename, folder_id)
+                return "Incorrect API key provided, please make sure your API key is correct!"
         else:
             return "Only pdf, docx files are supported"
         
-           
+

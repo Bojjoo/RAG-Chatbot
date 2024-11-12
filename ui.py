@@ -8,7 +8,15 @@ from dotenv import load_dotenv
 from datetime import datetime
 import secrets
 import streamlit as st
+from langchain_community.document_loaders import (
+    PyPDFLoader,
+    TextLoader,
+    UnstructuredWordDocumentLoader
+)
+import tiktoken
+import tempfile
 
+tokenizer = tiktoken.get_encoding("cl100k_base")
 
 st.set_page_config(layout="wide")
 
@@ -126,9 +134,33 @@ def get_retriever_admin(admin_department: str, folder_id: str):
         return f"Error: {str(e)}"
 
 
+def counting_token(file):
+    file_extension = os.path.splitext(file.name)[1].lower()
+    loaders = {
+        '.pdf': PyPDFLoader,
+        '.txt': TextLoader,
+        '.docx': UnstructuredWordDocumentLoader
+    }
+    if file_extension not in loaders:
+        raise ValueError("Unsupported file type")
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as tmp_file:
+        tmp_file.write(file.read())  # Write the uploaded file content to the temp file
+        tmp_file_path = tmp_file.name
+
+    loader = loaders[file_extension](tmp_file_path)
+
+    contexts = ''.join(doc.page_content for doc in loader.load())
+    tokens = tokenizer.encode(contexts)
+    os.remove(tmp_file_path)
+    return len(tokens), len(contexts)
+
+
 # Màn hình đăng nhập
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
+
+st.session_state["semantic_chunking"] = False
 
 if not st.session_state["authenticated"]:
     User_tab, Admin_tab = st.tabs(["User", "Admin"])
@@ -515,7 +547,11 @@ Note that this does not override, but "appended" on top of the global system ins
 
                     create_folder_button = st.button(key="Create folder user", icon=":material/create_new_folder:", label="")
                     # Kiểm tra nếu người dùng chọn file
-                    if uploaded_file is not None:
+                    if uploaded_file:
+                        if st.toggle(label="Semantic chunking", key="Semantic_chunking_upload_file"):
+                            st.session_state["semantic_chunking"] = True
+                            st.info("""Semantic chunking helps the RAG system more accurately understand the context of the file.
+However, it could increase the token usage and take longer time.""", icon="ℹ️")
                         upload_file_endpoint = os.getenv("UPLOAD_DATA")
                         if create_folder_button:
                             # Gửi POST request với file trực tiếp từ Streamlit lên FastAPI
@@ -528,7 +564,8 @@ Note that this does not override, but "appended" on top of the global system ins
                                     files = {"file": (uploaded_file.name, uploaded_file)}  # , "application/pdf"
                                     data = {
                                             "user_id": st.session_state["user_id"],
-                                            "folder_id": folder_id
+                                            "folder_id": folder_id,
+                                            "semantic_chunking": st.session_state["semantic_chunking"]
                                             }
                                     # Gửi request lên FastAPI
                                     response = requests.post(upload_file_endpoint, files=files, data=data)
@@ -547,6 +584,7 @@ Note that this does not override, but "appended" on top of the global system ins
                                 retriever_status = get_retriever(st.session_state["user_id"],
                                                                  st.session_state["admin_department"], folder_id)
                             st.session_state["update_retriever"] = False
+                            st.session_state["semantic_chunking"] = False
 
                             st.session_state["add_folder"] = False
                             st.rerun()
@@ -640,7 +678,11 @@ Note that this does not override, but "appended" on top of the global system ins
                                 uploaded_file = st.file_uploader("Choose a file", type=["pdf", "docx"],
                                                                  key="upuserfile" + folder[0])
                                 # Kiểm tra nếu người dùng chọn file
-                                if uploaded_file is not None:
+                                if uploaded_file:
+                                    if st.toggle(label="Semantic chunking", key="Semantic_chunking_upload_file"):
+                                        st.session_state["semantic_chunking"] = True
+                                        st.info("""Semantic chunking helps the RAG system more accurately understand the context of the file. 
+However, it could increase the token usage and take longer time.""", icon="ℹ️")
                                     upload_file_endpoint = os.getenv("UPLOAD_DATA")
 
                                     if st.button(label="Add document", icon=":material/upload:",
@@ -650,7 +692,8 @@ Note that this does not override, but "appended" on top of the global system ins
                                             # Định nghĩa multipart-form cho file và các thông tin khác
                                             files = {"file": (uploaded_file.name, uploaded_file)}  # , "application/pdf"
                                             data = {"user_id": st.session_state["user_id"],
-                                                    "folder_id": folder[0]
+                                                    "folder_id": folder[0],
+                                                    "semantic_chunking": st.session_state["semantic_chunking"]
                                                     }
 
                                             # Gửi request lên FastAPI
@@ -669,6 +712,7 @@ Note that this does not override, but "appended" on top of the global system ins
                                             retriever_status = get_retriever(st.session_state["user_id"],
                                                                              st.session_state["admin_department"], folder[0])
                                         st.session_state["update_retriever"] = False
+                                        st.session_state["semantic_chunking"] = False
                                         st.rerun()
                                 if st.button("Save", key="save folder user" + folder[0]):
                                     sql_conn.update_folder_user(folder[0], new_name,
@@ -837,13 +881,11 @@ Note that this does not override, but "appended" on top of the global system ins
                 col_1, col_2 = st.columns([3, 1.5])
                 with col_1:
                     if st.session_state["title_prompt_template_user"] == "Normal QA":
-                        with st.popover("Chat with document", use_container_width=True):
-                            st.markdown(f"{PROMPT_TEMPLATE}")
-                    elif st.session_state["title_prompt_template_user"] == "Chat with document":
                         with st.popover("Normal QA", use_container_width=True):
                             st.markdown(f" ")
-                    # with st.popover("Normal Question Answer", use_container_width=True):
-                    #     st.markdown(" ")
+                    elif st.session_state["title_prompt_template_user"] == "Chat with document":
+                        with st.popover("Chat with document", use_container_width=True):
+                            st.markdown(f"{PROMPT_TEMPLATE}")
                 with col_2:
                     if st.button("Switch", key='switch_prompt_template'):
                         if st.session_state["title_prompt_template_user"] == "Normal QA":
@@ -1139,7 +1181,11 @@ Note that this does not override, but "appended" on top of the global system ins
 
                 create_folder_button = st.button(label="Create folder", icon=":material/create_new_folder:")
                 # Kiểm tra nếu người dùng chọn file
-                if uploaded_file is not None:
+                if uploaded_file:
+                    if st.toggle(label="Semantic chunking", key="Semantic_chunking_upload_file"):
+                        st.session_state["semantic_chunking"] = True
+                        st.info("""Semantic chunking helps the RAG system more accurately understand the context of the file.
+However, it could increase the token usage and take longer time.""", icon="ℹ️")
                     upload_file_endpoint = os.getenv("UPLOAD_DATA_ADMIN")
                     if create_folder_button:
                         # Gửi POST request với file trực tiếp từ Streamlit lên FastAPI
@@ -1151,7 +1197,8 @@ Note that this does not override, but "appended" on top of the global system ins
                                 # Định nghĩa multipart-form cho file và các thông tin khác
                                 files = {"file": (uploaded_file.name, uploaded_file)} #, "application/pdf"
                                 data = {"admin_department": st.session_state["admin_department"],
-                                        "folder_id": folder_id
+                                        "folder_id": folder_id,
+                                        "semantic_chunking": st.session_state["semantic_chunking"]
                                         }
 
                                 # Gửi request lên FastAPI
@@ -1169,6 +1216,7 @@ Note that this does not override, but "appended" on top of the global system ins
                         if st.session_state["update_retriever"]:
                             retriever_status = get_retriever_admin(st.session_state["admin_department"], folder_id)
                         st.session_state["update_retriever"] = False
+                        st.session_state["semantic_chunking"] = False
                         st.session_state["add_folder"] = False
                         st.rerun()
                 else:
@@ -1267,7 +1315,11 @@ Note that this does not override, but "appended" on top of the global system ins
                             # Thêm file nếu muốn
                             uploaded_file = st.file_uploader("Choose a file", type=["pdf", "docx"], key="upfile"+folder[0])
                             # Kiểm tra nếu người dùng chọn file
-                            if uploaded_file is not None:
+                            if uploaded_file:
+                                if st.toggle(label="Semantic chunking", key="Semantic_chunking_upload_file"):
+                                    st.session_state["semantic_chunking"] = True
+                                    st.info("""Semantic chunking helps the RAG system more accurately understand the context of the file.
+However, it could increase the token usage and take longer time.""", icon="ℹ️")
                                 upload_file_endpoint = os.getenv("UPLOAD_DATA_ADMIN")
 
                                 if st.button(label="Add document", icon=":material/upload:"):
@@ -1276,7 +1328,8 @@ Note that this does not override, but "appended" on top of the global system ins
                                         # Định nghĩa multipart-form cho file và các thông tin khác
                                         files = {"file": (uploaded_file.name, uploaded_file)} #, "application/pdf"
                                         data = {"admin_department": st.session_state["admin_department"],
-                                                "folder_id": folder[0]
+                                                "folder_id": folder[0],
+                                                "semantic_chunking": st.session_state["semantic_chunking"]
                                                 }
 
                                         # Gửi request lên FastAPI
@@ -1293,6 +1346,7 @@ Note that this does not override, but "appended" on top of the global system ins
                                     if st.session_state["update_retriever"]:
                                         retriever_status = get_retriever_admin(st.session_state["admin_department"], folder[0])
                                     st.session_state["update_retriever"] = False
+                                    st.session_state["semantic_chunking"] = False
                                     time.sleep(2)
                                     st.rerun()
                             if st.button("Save", key="save folder"+folder[0]):
