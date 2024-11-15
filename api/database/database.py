@@ -57,19 +57,6 @@ where fu.folder_id like 'u_csv_folder%' and user_id='{user_id}' and type='csv_fi
         a = self.cur.fetchall()
         return a
 
-    # # Lấy ra conversation_id của từng phần (system, user)
-    # def get_conversationid_system(self, user_id):
-    #     self.cur.execute(f"select conversation_id from conversations_system where user_id='{user_id}'")
-    #     return self.cur.fetchall()
-    #
-    # def get_conversationid_user_textfile(self, folder_id):
-    #     self.cur.execute(f"select conversation_id from conversations_user where folder_id='{folder_id}' and type='text_file'")
-    #     return self.cur.fetchall()
-    #
-    # def get_conversationid_user_csvfile(self, user_id):####################################################
-    #     self.cur.execute(f"select conversation_id from conversations_user where user_id='{user_id}' and type='csv_file'")
-    #     return self.cur.fetchall()
-
     # Lấy conversation name dựa vào conversation id
     def get_conversation_name_from_conversationid(self, conversation_id):
         self.cur.execute(f"select conversation_name from conversations_user where conversation_id = '{conversation_id}'")
@@ -99,8 +86,8 @@ VALUES ('{conversation_id}', '{conversation_name}', (select folder_id from folde
         self.cur.execute(f"""insert into conversations_user(conversation_id, conversation_name, folder_id, type)
 VALUES ('{conversation_id}', '{conversation_name}', (select folder_id from folders_user where user_id='{user_id}' and folder_id like 'u_csv_folder%'), '{type}')""")
     
-    def create_conversation_system(self, conversation_name, user_id, folder_id):
-        conversation_id = "cv" + datetime.now().strftime("%Y%m%d%H%m") + secrets.token_hex(3)
+    def create_conversation_system(self, conversation_id, conversation_name, user_id, folder_id):
+
         self.cur.execute(
             f"""INSERT INTO conversations_system(conversation_id, conversation_name, user_id, folder_id)
             VALUES ('{conversation_id}', '{conversation_name}', '{user_id}', '{folder_id}')""")
@@ -334,9 +321,9 @@ VALUES ('{conversation_id}', '{conversation_name}', (select folder_id from folde
         self.cur.execute(f"delete from system_prompts where prompt_id='{prompt_id}'")
 
     # Folder project của admin
-    def add_folder(self, folder_id, folder_name, admin_department, prompt):
-        query = "insert into folders(folder_id, folder_name, admin_department, prompt) values(%s, %s, %s, %s)"
-        self.cur.execute(query, (folder_id, folder_name, admin_department, prompt))
+    def add_folder(self, folder_id, folder_name, admin_department, image_url, description, prompt):
+        query = "insert into folders(folder_id, folder_name, admin_department, image_url, description, prompt) values(%s, %s, %s, %s, %s, %s)"
+        self.cur.execute(query, (folder_id, folder_name, admin_department, image_url, description, prompt))
 
     # Xóa folder
     def delete_folder(self, folder_id):
@@ -348,7 +335,7 @@ VALUES ('{conversation_id}', '{conversation_name}', (select folder_id from folde
     
     # Lấy ra các folder của admin:
     def get_folders(self, admin_department):
-        self.cur.execute(f"select folder_id, folder_name, prompt from folders where admin_department='{admin_department}'")
+        self.cur.execute(f"select folder_id, folder_name, image_url, description, prompt from folders where admin_department='{admin_department}'")
         return self.cur.fetchall()
 
     # Lấy ra các file trong folder đó:
@@ -357,10 +344,10 @@ VALUES ('{conversation_id}', '{conversation_name}', (select folder_id from folde
         return self.cur.fetchall()
     
     # Cập nhật prompt và tên folder
-    def update_folder(self, folder_id, folder_name, prompt):
+    def update_folder(self, folder_id, folder_name, image_url, description, prompt):
         # query = "update folders set folder_name='{folder_name}', prompt='{prompt}' where folder_id='{folder_id}'"
-        query = "update folders set folder_name=%s, prompt=%s where folder_id=%s"
-        self.cur.execute(query, (folder_name, prompt, folder_id))
+        query = "update folders set folder_name=%s, image_url=%s, description=%s, prompt=%s where folder_id=%s"
+        self.cur.execute(query, (folder_name, image_url, description, prompt, folder_id))
 
     # Phần template folder
     def add_template_folder(self, folder_id, template_text):

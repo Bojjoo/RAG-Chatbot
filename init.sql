@@ -65,6 +65,8 @@ CREATE TABLE folders(
 	folder_id varchar(20) primary key,
     folder_name varchar(100),
 	admin_department varchar(20) references admins(admin_department),
+	image_url varchar(400),
+	description varchar(200),
 	prompt varchar(10000)
 );
 

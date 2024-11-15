@@ -9,6 +9,7 @@ from datetime import datetime
 import secrets
 import streamlit as st
 from streamlit_extras.bottom_container import bottom
+from streamlit_extras.grid import grid
 from langchain_community.document_loaders import (
     PyPDFLoader,
     TextLoader,
@@ -17,15 +18,15 @@ from langchain_community.document_loaders import (
 import shutil
 import tiktoken
 import tempfile
+import random
 
 tokenizer = tiktoken.get_encoding("cl100k_base")
 
 st.set_page_config(layout="wide")
-
-
 float_init()
 
 sql_conn = SQLDatabase()
+st.session_state["image_files"] = [f for f in os.listdir("./logo/images")]
 
 load_dotenv()
 USER_URL = os.getenv("USER_URL")
@@ -336,7 +337,8 @@ if st.session_state["authenticated"]:
                                 conversation_name = "New conversation"
                                 if st.button(label="", icon=":material/add_box:",
                                              key="create_conversation_system" + f"{folder[0]}"):
-                                    sql_conn.create_conversation_system(conversation_name, st.session_state["user_id"],
+                                    conversation_id = "cv" + datetime.now().strftime("%Y%m%d%H%m") + secrets.token_hex(3)
+                                    sql_conn.create_conversation_system(conversation_id, conversation_name, st.session_state["user_id"],
                                                                         folder[0])
                                     # # Lấy danh sách các phiên hội thoại
                                     st.session_state[f"conversations_system_{folder[0]}"] = sql_conn.get_conversation_session_system(st.session_state["user_id"], folder[0])
@@ -356,7 +358,7 @@ if st.session_state["authenticated"]:
                                     # Duyệt qua toàn bộ danh sách hội thoại với System và hiển thị dưới dạng nút
                                     if st.button(f"{conv[1]}", icon=":material/chat:", key=f"system_{conv[0]}", use_container_width=True):
                                         st.session_state["selected_conversation_id"] = (conv[0], folder[0], folder[1],
-                                                                                        folder[2])
+                                                                                        folder[4])
                                 with option_col:
                                     if st.button(label="", icon=":material/delete:", key="delete" + f'{conv[0]}'):
                                         sql_conn.delete_conversation_system(conv[0])
@@ -420,7 +422,7 @@ if st.session_state["authenticated"]:
                         for sender, message in chat_history
                     ] if chat_history else []
                     # Nếu không có lịch sử chat thì hiển thị các prompt template của folder đó
-                    if not chat_history: # and st.session_state["selected_conversation_id"][1]:
+                    if not chat_history:
                         prompt_template = sql_conn.get_templates_folder(st.session_state["selected_conversation_id"][1])
                         try:
                             pt_container = st.container()
@@ -493,6 +495,39 @@ if st.session_state["authenticated"]:
                                 st.rerun()
 
                 else:
+                    x = len(st.session_state["folders"])
+                    num_rows = x // 3 if x % 3 == 0 else x // 3 + 1
+                    for i in range(num_rows):
+                        cols = st.columns(3)  # Tạo 3 cột trong mỗi hàng
+                        for j in range(3):
+                            index = i * 3 + j
+                            if index < x:
+                                # Hiển thị tên folder vào cột tương ứng
+                                with cols[j]:
+                                    with st.container(border=True):
+                                        if len(st.session_state["folders"][index][2]) > 0:
+                                            image_path = st.session_state["folders"][index][2]
+                                        else:
+                                            random_image = random.choice(st.session_state["image_files"])
+                                            image_path = os.path.join("./logo/images/", random_image)
+                                        st.image(image_path, width=50)
+
+                                        st.markdown(f'<div style="text-align:center;"><strong>{st.session_state["folders"][index][1]}</strong></div>',
+                                                    unsafe_allow_html=True)
+                                        st.markdown(f'<div style="text-align:center;">{st.session_state["folders"][index][3]}</div>',
+                                                    unsafe_allow_html=True)
+                                        if st.button("Start chat", key=f"start_chat_{index}"):
+                                            conversation_name = "New conversation"
+                                            conversation_id = "cv" + datetime.now().strftime("%Y%m%d%H%m") + secrets.token_hex(3)
+                                            sql_conn.create_conversation_system(conversation_id, conversation_name, st.session_state["user_id"], st.session_state["folders"][index][0])
+                                            # # Lấy danh sách các phiên hội thoại
+                                            st.session_state[f"conversations_system_{folder[0]}"] = sql_conn.get_conversation_session_system(st.session_state["user_id"], folder[0])
+                                            st.session_state["selected_conversation_id"] = (conversation_id,
+                                                                                            st.session_state["folders"][index][0],
+                                                                                            st.session_state["folders"][index][1],
+                                                                                            st.session_state["folders"][index][4])
+                                            st.rerun()
+
                     if st.session_state["question"]:
                         # create a conversation first
                         conversation_name = "New conversation"
@@ -504,11 +539,11 @@ if st.session_state["authenticated"]:
 
                         st.chat_message("user").markdown(st.session_state["question"])
                         st.session_state.messages.append({"role": "user", "output": st.session_state["question"]})
+
                         with st.chat_message("assistant"):
                             assistant_message = st.empty()
 
                             prompt = " "
-
                             response_stream = handler_input_system(
                                 st.session_state["question"], st.session_state["selected_conversation_id"][0],
                                 st.session_state["user_id"], SYSTEM_URL,
@@ -1259,6 +1294,9 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
                 folder_name = st.text_input("Name of the folder:", placeholder="New folder")
                 if len(folder_name) == 0:
                     folder_name = "New folder"
+                image_url = st.text_input("Folder Picture", placeholder="https://...")
+                description = st.text_area("Description", max_chars=200,
+                                           placeholder="E.g., A life coach who can help you set and achieve personal and professional goals.")
                 # Thêm prompt
                 prompt = st.text_area("Project Context & Instructions:", max_chars=10000)
 
@@ -1279,7 +1317,7 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
                             try:
                                 folder_id = "fd" + datetime.now().strftime("%Y%m%d%H%m") + secrets.token_hex(3)
                                 sql_conn.add_folder(folder_id, folder_name, st.session_state["admin_department"],
-                                                    prompt=prompt)
+                                                    image_url, description, prompt=prompt)
                                 # Định nghĩa multipart-form cho file và các thông tin khác
                                 files = {"file": (uploaded_file.name, uploaded_file)} #, "application/pdf"
                                 data = {"admin_department": st.session_state["admin_department"],
@@ -1309,7 +1347,7 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
                     if create_folder_button:
                         folder_id = "fd" + datetime.now().strftime("%Y%m%d%H%m") + secrets.token_hex(3)
                         sql_conn.add_folder(folder_id, folder_name, st.session_state["admin_department"],
-                                            prompt=prompt)
+                                            image_url, description, prompt=prompt)
                         # Update lai retriever
                         st.session_state["update_retriever"] = True
                         if st.session_state["update_retriever"]:
@@ -1323,10 +1361,18 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
             if "all_folder" in st.session_state:
                 for folder in st.session_state["all_folder"]:
                     files = sql_conn.get_folder_files(folder[0])
-                    col1, col2, col3 = st.columns([7, 1, 1])
+                    image_col, col1, col2, col3 = st.columns([0.4, 7, 1, 1])
+                    with image_col:
+                        if len(folder[2]) > 0:
+                            st.image(folder[2], width=40)
+                        else:
+                            random_image = random.choice(st.session_state["image_files"])
+                            random_image_path = os.path.join("./logo/images/", random_image)
+                            st.image(random_image_path, width=40)
                     with col1:
                         with st.expander(folder[1]):
-                            st.markdown("__Instruction:__\n"+folder[2])
+                            st.markdown("__Description:__\n"+folder[3])
+                            st.markdown("__Instruction:__\n"+folder[4])
                             for file_name, size in files:
                                 st.markdown(f"📄 {file_name} ({size:.2f} MB)", unsafe_allow_html=True)
                             st.write("---")
@@ -1362,12 +1408,20 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
                         def edit(folder):
                             new_name = st.text_input("Name of the folder:", value=folder[1],
                                                      key="edit"+f"{folder[0]}faku")
-                            new_prompt = st.text_area("Project Context & Instructions:", value=folder[2],
+                            image_url = st.text_input("Folder Picture", value=folder[2])
+                            description = st.text_area("Description", max_chars=200,
+                                                       value=folder[3])
+                            new_prompt = st.text_area("Project Context & Instructions:", value=folder[4],
                                                       key="text_area"+f"{folder[0]}", max_chars=10000)
                             
                             # nếu user không nhập nội dung mới mà lỡ bấm save thì vẫn giữ nguyên nội dung cũ
                             if len(new_name) == 0:
                                 new_name = folder[1]
+
+                            if len(description) == 0:
+                                description = folder[3]
+                            if len(image_url) == 0:
+                                image_url = folder[2]
                             if len(new_prompt) == 0:
                                 new_prompt = folder[2]
 
@@ -1436,7 +1490,7 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
                                     time.sleep(2)
                                     st.rerun()
                             if st.button("Save", key="save folder"+folder[0]):
-                                sql_conn.update_folder(folder[0], new_name, prompt=new_prompt)
+                                sql_conn.update_folder(folder[0], new_name, image_url, description, new_prompt)
                                 st.rerun()
 
                         if st.button(label="", icon=":material/edit:", key="edit"+f"{folder[0]}",  use_container_width=True):
