@@ -8,11 +8,13 @@ from dotenv import load_dotenv
 from datetime import datetime
 import secrets
 import streamlit as st
+from streamlit_extras.bottom_container import bottom
 from langchain_community.document_loaders import (
     PyPDFLoader,
     TextLoader,
     UnstructuredWordDocumentLoader
 )
+import shutil
 import tiktoken
 import tempfile
 
@@ -144,15 +146,15 @@ def counting_token(file):
     if file_extension not in loaders:
         raise ValueError("Unsupported file type")
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as tmp_file:
-        tmp_file.write(file.read())  # Write the uploaded file content to the temp file
-        tmp_file_path = tmp_file.name
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_file_path = os.path.join(tmp_dir, file.name)
+        with open(tmp_file_path, 'wb') as tmp_file:
+            shutil.copyfileobj(file.file, tmp_file)
+        loader = loaders[file_extension](tmp_file_path)
 
-    loader = loaders[file_extension](tmp_file_path)
+        contexts = ''.join(doc.page_content for doc in loader.load())
+        tokens = tokenizer.encode(contexts)
 
-    contexts = ''.join(doc.page_content for doc in loader.load())
-    tokens = tokenizer.encode(contexts)
-    os.remove(tmp_file_path)
     return len(tokens), len(contexts)
 
 
@@ -194,6 +196,7 @@ if not st.session_state["authenticated"]:
                             st.success("Account registered successfully! You can now log in.")
                             user_id = sql_conn.get_userid_from_username(new_username)
                             sql_conn.add_folder_user_csvfile(user_id)
+                            sql_conn.add_folder_user_textfile_non_folder(user_id)
                         else:
                             st.warning(f"The user name {new_username} is existed, please choose another user name!")
                     except Exception as e:
@@ -311,18 +314,20 @@ if st.session_state["authenticated"]:
         def Chat_Session():
             # Định nghĩa prompt template
             if "prompt_template" not in st.session_state:
-                st.session_state["prompt_template"] = " "
+                st.session_state["prompt_template"] = PROMPT_TEMPLATE
             if "title_prompt_template" not in st.session_state:
-                st.session_state["title_prompt_template"] = "Normal QA"
+                st.session_state["title_prompt_template"] = "Chat with document"
             with st.sidebar:
                 st.info(f"Nice to meet you: {st.session_state['user_name']}", icon=":material/sentiment_satisfied:")
                 st.session_state["folders"] = sql_conn.get_folders(st.session_state["admin_department"])
 
                 # Lấy ra tất cả system conversation id
                 st.session_state["conversations_system"] = []
+                st.session_state["conversation_system_non_folder"] = sql_conn.get_conversation_session_system_non_folder(st.session_state["user_id"])
+                st.session_state["conversations_system"].extend([i[0] for i in st.session_state["conversation_system_non_folder"]])
+
                 for folder in st.session_state["folders"]:
                     with st.expander(folder[1]):
-
                         # Create conversation
                         col_1, col_2 = st.columns([1, 2])
                         with col_1:
@@ -334,17 +339,13 @@ if st.session_state["authenticated"]:
                                     sql_conn.create_conversation_system(conversation_name, st.session_state["user_id"],
                                                                         folder[0])
                                     # # Lấy danh sách các phiên hội thoại
-                                    st.session_state[
-                                        f"conversations_system_{folder[0]}"] = sql_conn.get_conversation_session_system(
-                                        st.session_state["user_id"], folder[0])
-
+                                    st.session_state[f"conversations_system_{folder[0]}"] = sql_conn.get_conversation_session_system(st.session_state["user_id"], folder[0])
                                     st.session_state["create_new_conversation"] = False
                                     st.rerun()
 
                         # All conversations
-                        st.session_state[f"conversations_system_{folder[0]}"] = sql_conn.get_conversation_session_system(
-                                                                                st.session_state["user_id"], folder[0])
-                        # Correct way to populate the conversation IDs
+                        st.session_state[f"conversations_system_{folder[0]}"] = sql_conn.get_conversation_session_system(st.session_state["user_id"], folder[0])
+                        # insert all conversation_id in session state
                         st.session_state["conversations_system"].extend([i[0] for i in st.session_state[f"conversations_system_{folder[0]}"]])
 
                         # Hiển thị conversation của folder đó
@@ -359,22 +360,28 @@ if st.session_state["authenticated"]:
                                 with option_col:
                                     if st.button(label="", icon=":material/delete:", key="delete" + f'{conv[0]}'):
                                         sql_conn.delete_conversation_system(conv[0])
-                                        st.session_state[f"conversations_system_{folder[0]}"] = sql_conn.get_conversation_session_system(st.session_state["user_id"], folder[0])
+                                        st.session_state[f"conversations_system_{folder[0]}"] = [c for c in st.session_state[f"conversations_system_{folder[0]}"]
+                                                                                                 if c[0] != conv[0]]
                                         st.session_state["conversations_system"].remove(conv[0])
                                         st.rerun()
-                        else:
-                            st.warning("No system conversation sessions available.")
-                            # Cần check lại cái này vì nó sẽ lưu prompt và title của folder cuối cùng
-                        if "prompt_template" not in st.session_state:
-                            st.session_state[f"prompt_template_{folder[0]}"] = folder[2]
-                        if "title_prompt_template" not in st.session_state:
-                            st.session_state[f"title_prompt_template_{folder[0]}"] = "Instruction of folder " + f"{folder[1]}"
+                st.write("---")
+                for conv in st.session_state["conversation_system_non_folder"]:
+                    conversation_col, option_col = st.columns([5, 1])
+                    with conversation_col:
+                        if st.button(f"{conv[1]}", icon=":material/chat:", key=f"system_{conv[0]}", use_container_width=True):
+                            st.session_state["selected_conversation_id"] = (conv[0], None, None, None)
+                    with option_col:
+                        if st.button(label="", icon=":material/delete:", key="delete" + f'{conv[0]}'):
+                            sql_conn.delete_conversation_system(conv[0])
+                            st.session_state["conversation_system_non_folder"] = [c for c in st.session_state["conversation_system_non_folder"]
+                                                                                  if c[0] != conv[0]]
+                            st.session_state["conversations_system"].remove(conv[0])
+                            st.rerun()
 
             # Select model
             st.session_state.model = 'gpt-4o-mini'
-            col1, col2, col3 = st.columns([1.4, 6, 2], vertical_alignment="top")
-
-            with col1:
+            col1, col2 = st.columns([8, 1.4], vertical_alignment="top")
+            with col2:
                 option = st.selectbox(
                     label="Model:",
                     options=("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"
@@ -385,91 +392,89 @@ if st.session_state["authenticated"]:
                 )
                 if option:
                     st.session_state.model = option
-            css_col1 = float_css_helper(top="70px")
-            col1.float(css_col1)
+            css_col2 = float_css_helper(top="70px", bolder=True)
+            col2.float(css_col2)
+            with bottom():
+                input_col, empty_col = st.columns([8, 1.4], vertical_alignment="top")
+                with input_col:
+                    chat_input_container = st.container()
+                    with chat_input_container:
+                        st.session_state["question"] = st.chat_input("What do you want to know?")
+                    css_chat_input_container = float_css_helper(bottom="35px", z_index="100")
+                    chat_input_container.float(css_chat_input_container)
 
             # Chat session
-            with col2:
+            with col1:
                 if "selected_conversation_id" in st.session_state and st.session_state["selected_conversation_id"][0] not in st.session_state["conversations_system"]:
-                        del st.session_state["selected_conversation_id"]
-                        del st.session_state["messages"]
-                chat_input_container = st.container()
-                with chat_input_container:
-                    st.session_state["question"] = st.chat_input("What do you want to know?")
-                css_chat_input_container = float_css_helper(bottom="35px")
-                chat_input_container.float(css_chat_input_container)
-                
+                    del st.session_state["selected_conversation_id"]
+                    del st.session_state["messages"]
+
                 # Hiển thị lịch sử hội thoại của phiên đã chọn
-
-                messages_container = st.container(border=False) #height=800,
-                with messages_container:
-                    if "messages" not in st.session_state:
-                        st.session_state.messages = []
-
-                    if "selected_conversation_id" in st.session_state:
+                if "messages" not in st.session_state:
+                    st.session_state.messages = []
+                if "selected_conversation_id" in st.session_state:
+                    chat_history = sql_conn.get_chat_history_system(st.session_state["selected_conversation_id"][0])
+                    # Cập nhật tin nhắn vào session_state.messages nếu có lịch sử
+                    st.session_state.messages = [
+                        {"role": "user" if sender == "human" else "assistant", "output": message}
+                        for sender, message in chat_history
+                    ] if chat_history else []
+                    # Nếu không có lịch sử chat thì hiển thị các prompt template của folder đó
+                    if not chat_history: # and st.session_state["selected_conversation_id"][1]:
                         prompt_template = sql_conn.get_templates_folder(st.session_state["selected_conversation_id"][1])
-                        chat_history = sql_conn.get_chat_history_system(st.session_state["selected_conversation_id"][0])
-                        st.session_state.messages = []
-                        # Cập nhật tin nhắn vào session_state.messages nếu có lịch sử
-                        if chat_history:
-                            st.session_state.messages = [
-                                {"role": "user" if sender == "human" else "assistant", "output": message}
-                                for sender, message in chat_history
-                            ]
-                            ##########################################
+                        try:
+                            pt_container = st.container()
+                            with pt_container:
+                                cols = st.columns(len(prompt_template))
+                                for i in range(len(prompt_template)):
+                                    with cols[i]:
+                                        if st.button(prompt_template[i][1]):
+                                            st.session_state["question"] = prompt_template[i][1]
+                                            pt_container.empty()
+                                            st.rerun()
+                                pt_container_css = float_css_helper(bottom="400px")
+                                pt_container.float(pt_container_css)
+                        except:
+                            pass
+
+                # Hiển thị các tin nhắn trong phiên hội thoại đã chọn
+                if "messages" in st.session_state:
+                    for message in st.session_state.messages:
+                        with st.chat_message(message["role"]):
+                            st.markdown(message["output"])
+                # try:
+                if "selected_conversation_id" in st.session_state:
+                    # Gửi tin nhắn mới trong giao diện chat
+                    if st.session_state["question"]:
+                        st.chat_message("user").markdown(st.session_state["question"])
+                        st.session_state.messages.append({"role": "user", "output": st.session_state["question"]})
+                        with st.chat_message("assistant"):
+                            assistant_message = st.empty()
+
+                            prompt = st.session_state["prompt_template"] if st.session_state["selected_conversation_id"][1] else ""
+
+                            response_stream = handler_input_system(
+                                           st.session_state["question"], st.session_state["selected_conversation_id"][0],
+                                           st.session_state["user_id"], SYSTEM_URL,
+                                           st.session_state.model, st.session_state["admin_department"],
+                                           st.session_state["selected_conversation_id"][1] or "", prompt,
+                                           st.session_state["selected_conversation_id"][3] or ""
+                                )
+                            # Stream and display the assistant's response
+                            output = ""
+                            for token in response_stream:
+                                output += token
+                                assistant_message.markdown(output)
+                                time.sleep(0.01)
+                            st.session_state.messages.append({"role": "assistant", "output": output})
+
+                        if output.startswith('Error'):
+                            st.warning("Please provide your api key first!")
                         else:
-                            try:
-                                pt_container = st.container()
-                                with pt_container:
-                                    cols = st.columns(len(prompt_template))
-                                    for i in range(len(prompt_template)):
-                                        with cols[i]:
-                                            if st.button(prompt_template[i][1]):
-                                                st.session_state["question"] = prompt_template[i][1]
-                                                pt_container.empty()
-                                                st.rerun()
-                                    pt_container_css = float_css_helper(bottom="300px")
-                                    pt_container.float(pt_container_css)
-                            except:
-                                pass
-                            #########################################
-                    # Hiển thị các tin nhắn trong phiên hội thoại đã chọn
-                    if "messages" in st.session_state:
-                        for message in st.session_state.messages:
-                            with st.chat_message(message["role"]):
-                                st.markdown(message["output"])
-                    # try:
-                    if "selected_conversation_id" in st.session_state:
-                        # Gửi tin nhắn mới trong giao diện chat
-                        if st.session_state["question"]:
-                            st.chat_message("user").markdown(st.session_state["question"])
-                            st.session_state.messages.append({"role": "user", "output": st.session_state["question"]})
-                            with st.chat_message("assistant"):
-                                assistant_message = st.empty()
+                            sender = ['human', 'ai']
+                            sql_conn.insert_chat_system(st.session_state["selected_conversation_id"][0], sender[0], st.session_state["question"])
+                            sql_conn.insert_chat_system(st.session_state["selected_conversation_id"][0], sender[1], output)
 
-                                prompt = st.session_state["prompt_template"]
-
-                                response_stream = handler_input_system(
-                                               st.session_state["question"], st.session_state["selected_conversation_id"][0],
-                                               st.session_state["user_id"], SYSTEM_URL,
-                                               st.session_state.model, st.session_state["admin_department"],
-                                               st.session_state["selected_conversation_id"][1], prompt,
-                                               st.session_state["selected_conversation_id"][3]
-                                    )
-                                # Stream and display the assistant's response
-                                output = ""
-                                for token in response_stream:
-                                    output += token
-                                    assistant_message.markdown(output)
-                                    time.sleep(0.01)
-                                st.session_state.messages.append({"role": "assistant", "output": output})
-
-                            if output.startswith('["Error"]'):
-                                st.warning("Please provide your api key first!")
-                            else:
-                                sender = ['human', 'ai']
-                                sql_conn.insert_chat_system(st.session_state["selected_conversation_id"][0], sender[0], st.session_state["question"])
-                                sql_conn.insert_chat_system(st.session_state["selected_conversation_id"][0], sender[1], output)
                             # Đổi tên conversation nêu tên vẫn còn là new conversation
                             conversation_name = sql_conn.get_conversation_name_from_conversationid_system(
                                                                         st.session_state["selected_conversation_id"][0])
@@ -480,42 +485,65 @@ if st.session_state["authenticated"]:
                                     "admin_department": st.session_state["admin_department"]
                                 }
                                 new_name = requests.post(rename_conversation_endpoint, json=data_for_rename)
+                                try:
+                                    sql_conn.change_conversation_name_system(st.session_state["selected_conversation_id"][0],
+                                                                             new_name.json().strip('"'))
+                                except:
+                                    pass
+                                st.rerun()
+
+                else:
+                    if st.session_state["question"]:
+                        # create a conversation first
+                        conversation_name = "New conversation"
+                        conversation_id = "cv" + datetime.now().strftime("%Y%m%d%H%m") + secrets.token_hex(3)
+                        sql_conn.create_conversation_system_non_folder(conversation_id, conversation_name,
+                                                                       st.session_state["user_id"])
+                        st.session_state["selected_conversation_id"] = (conversation_id, None, None, None)
+                        st.session_state["conversations_system"].append(conversation_id)
+
+                        st.chat_message("user").markdown(st.session_state["question"])
+                        st.session_state.messages.append({"role": "user", "output": st.session_state["question"]})
+                        with st.chat_message("assistant"):
+                            assistant_message = st.empty()
+
+                            prompt = " "
+
+                            response_stream = handler_input_system(
+                                st.session_state["question"], st.session_state["selected_conversation_id"][0],
+                                st.session_state["user_id"], SYSTEM_URL,
+                                st.session_state.model, st.session_state["admin_department"], "", prompt, ""
+                            )
+                            # Stream and display the assistant's response
+                            output = ""
+                            for token in response_stream:
+                                output += token
+                                assistant_message.markdown(output)
+                                time.sleep(0.01)
+                            st.session_state.messages.append({"role": "assistant", "output": output})
+
+                        if output.startswith('Error'):
+                            st.warning("Please provide your api key first!")
+                        else:
+                            sender = ['human', 'ai']
+                            sql_conn.insert_chat_system(st.session_state["selected_conversation_id"][0], sender[0], st.session_state["question"])
+                            sql_conn.insert_chat_system(st.session_state["selected_conversation_id"][0], sender[1], output)
+
+                        # Đổi tên conversation nêu tên vẫn còn là new conversation
+                        conversation_name = sql_conn.get_conversation_name_from_conversationid_system(st.session_state["selected_conversation_id"][0])
+                        if conversation_name == "New conversation":
+                            rename_conversation_endpoint = os.getenv("RENAME_CONVERSATION")
+                            data_for_rename = {
+                                "history": f"(human:{st.session_state['question'][:200]}); (ai: {output[:500]})",
+                                "admin_department": st.session_state["admin_department"]
+                            }
+                            new_name = requests.post(rename_conversation_endpoint, json=data_for_rename)
+                            try:
                                 sql_conn.change_conversation_name_system(st.session_state["selected_conversation_id"][0],
                                                                          new_name.json().strip('"'))
-                                st.session_state["conversations_system"] = sql_conn.get_conversation_session_system(
-                                                                                st.session_state["user_id"],
-                                                                                st.session_state["selected_conversation_id"][1])
-                                st.rerun()
-                    else:
-                        st.warning("Please select a conversation first!")
-                css_chat_message_container = float_css_helper(bottom="80px", top="70px", overflow_y="auto")
-                messages_container.float(css_chat_message_container)
-
-            with col3:
-                st.markdown(f'Prompt Template is using: {st.session_state["title_prompt_template"]}')
-                col_1, col_2 = st.columns([3, 1.5])
-                with col_1:
-                    try:
-                        if st.session_state["title_prompt_template"] == "Normal QA":
-                            with st.popover("Normal QA", use_container_width=True):
-                                st.markdown(" ")
-                        elif st.session_state["title_prompt_template"] == "Chat with document":
-                            with st.popover("Chat with document", use_container_width=True):
-                                st.markdown(f"{PROMPT_TEMPLATE}")
-                    except:
-                        st.warning("Choose a conversation first!")
-
-                with col_2:
-                    if st.button("Switch", key='switch_prompt_template_system'):
-                        if st.session_state["title_prompt_template"] == "Normal QA":
-                            st.session_state["prompt_template"] = PROMPT_TEMPLATE
-                            st.session_state["title_prompt_template"] = "Chat with document"
-                        elif st.session_state["title_prompt_template"] == "Chat with document":
-                            st.session_state["prompt_template"] = " "
-                            st.session_state["title_prompt_template"] = "Normal QA"
-                        st.rerun()
-
-            col3.float()
+                            except:
+                                pass
+                            st.rerun()
 
         # Chat with user's files
         def Chat_With_Files():
@@ -525,7 +553,7 @@ if st.session_state["authenticated"]:
             if "title_prompt_template_user" not in st.session_state:
                 st.session_state["title_prompt_template_user"] = "Normal QA"
 
-            with st.sidebar:
+            with (st.sidebar):
                 st.info(f"Nice to meet you: {st.session_state['user_name']}", icon=":material/sentiment_satisfied:")
                 #st.session_state["conversations_user_text"] = sql_conn.get_conversation_session_user_textfile(st.session_state["user_id"])
                 st.header("Create Folder Project", divider='orange')
@@ -611,6 +639,9 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
 
                 # Lấy ra tất cả conversation id
                 st.session_state["conversations_user_text"] = []
+                st.session_state["conversation_user_non_folder"] = sql_conn.get_conversation_session_user_textfile_non_folder(st.session_state["user_id"])
+                st.session_state["conversations_user_text"].extend([i[0] for i in st.session_state["conversation_user_non_folder"]])
+
                 for folder in st.session_state["folders_user"]:
                     with st.expander(folder[1]):
 
@@ -758,7 +789,7 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
                             for conv in st.session_state[f"conversations_user_{folder[0]}"]:
                                 conversation_col, option_col = st.columns([5, 1])
                                 with conversation_col:
-                                    # Duyệt qua toàn bộ danh sách hội thoại với System và hiển thị dưới dạng nút
+                                    # Duyệt qua toàn bộ danh sách hội thoại và hiển thị dưới dạng nút
                                     if st.button(f"{conv[1]}", icon=":material/chat:", key=f"user_{folder[0]}_{conv[0]}"
                                                  , use_container_width=True):
                                         st.session_state["selected_conversation_id"] = (conv[0], folder[0], folder[1],
@@ -766,21 +797,29 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
                                 with option_col:
                                     if st.button(label="", icon=":material/delete:", key="delete" + f'{conv[0]}'):
                                         sql_conn.delete_conversation(conv[0])
-                                        st.session_state[f"conversations_user_{folder[0]}"] = sql_conn.get_conversation_session_user_textfile(folder[0])
+                                        st.session_state[f"conversations_user_{folder[0]}"] = [c for c in st.session_state[f"conversations_user_{folder[0]}"]
+                                                                                               if c[0] != conv[0]]
                                         st.session_state["conversations_user_text"].remove(conv[0])
                                         st.rerun()
-                        else:
-                            st.warning("No system conversation sessions available.")
-                            # Cần check lại cái này vì nó sẽ lưu prompt và title của folder cuối cùng
-                        if "prompt_template" not in st.session_state:
-                            st.session_state[f"prompt_template_{folder[0]}"] = folder[2]
-                        if "title_prompt_template" not in st.session_state:
-                            st.session_state[f"title_prompt_template_{folder[0]}"] = "Instruction of folder " + f"{folder[1]}"
+
+                st.write("---")
+                for conv in st.session_state["conversation_user_non_folder"]:
+                    conversation_col, option_col = st.columns([5, 1])
+                    with conversation_col:
+                        if st.button(f"{conv[1]}", icon=":material/chat:", key=f"user_{conv[0]}",
+                                     use_container_width=True):
+                            st.session_state["selected_conversation_id"] = (conv[0], None, None, None)
+                    with option_col:
+                        if st.button(label="", icon=":material/delete:", key="delete" + f'{conv[0]}'):
+                            sql_conn.delete_conversation(conv[0])
+                            st.session_state["conversation_user_non_folder"] = [c for c in st.session_state["conversation_user_non_folder"]
+                                                                                if c[0] != conv[0]]
+                            st.session_state["conversations_user_text"].remove(conv[0])
+                            st.rerun()
 
             st.session_state.model = 'gpt-4o-mini'
-            col1, col2, col3 = st.columns([1.15, 5, 2], vertical_alignment="top")
-
-            with col1:
+            col1, col2 = st.columns([8, 1.5], vertical_alignment="top")
+            with col2:
                 option = st.selectbox(
                     label="Model:",
                     options=("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo",
@@ -791,94 +830,10 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
                 )
                 if option:
                     st.session_state.model = option
-            css_col1 = float_css_helper(top="70px")
-            col1.float(css_col1)
 
-            with col2:
-                if "selected_conversation_id" in st.session_state and st.session_state["selected_conversation_id"][0] not in st.session_state["conversations_user_text"]:
-                        del st.session_state["selected_conversation_id"]
-                        del st.session_state["messages"]
-                chat_input_container = st.container()
-                with chat_input_container:
-                    question = st.chat_input("What do you want to know?")
-                css = float_css_helper(bottom="35px")
-                chat_input_container.float(css)
-
-                # Phần hiển thị chat
-                messages_container = st.container(border=False)
-                with messages_container:
-                # Hiển thị lịch sử hội thoại của phiên đã chọn
-                    if "messages" not in st.session_state:
-                        st.session_state.messages = []
-
-                    if "selected_conversation_id" in st.session_state:
-                        chat_history = sql_conn.get_chat_history(st.session_state["selected_conversation_id"][0])
-                        st.session_state.messages = []
-                        # Cập nhật tin nhắn vào session_state.messages nếu có lịch sử
-                        if chat_history:
-                            st.session_state.messages = [
-                                {"role": "user" if sender == "human" else "assistant", "output": message}
-                                for sender, message in chat_history
-                            ]
-
-                    # Hiển thị các tin nhắn trong phiên hội thoại đã chọn
-                    if "messages" in st.session_state:
-                        for message in st.session_state.messages:
-                            with st.chat_message(message["role"]):
-                                st.markdown(message["output"])
-                    # try:
-                    if "selected_conversation_id" in st.session_state:
-                    # Gửi tin nhắn mới trong giao diện chat
-                        if question:
-                            st.chat_message("user").markdown(question)
-                            st.session_state.messages.append({"role": "user", "output": question})
-
-                            with st.chat_message("assistant"):
-                                assistant_message = st.empty()
-
-                                prompt_template = st.session_state["prompt_template_user"]
-                                response_stream = handler_input_user(
-                                    question, st.session_state["selected_conversation_id"][0],
-                                    st.session_state["user_id"], USER_URL, st.session_state.model, prompt_template,
-                                    st.session_state["admin_department"], st.session_state["selected_conversation_id"][1],
-                                    st.session_state["selected_conversation_id"][3])
-
-                                # Stream and display the assistant's response
-                                output = ""
-                                for token in response_stream:
-                                    output += token
-                                    assistant_message.markdown(output)
-                                    time.sleep(0.01)
-                                st.session_state.messages.append({"role": "assistant", "output": output})
-
-                            if output.startswith('["Error"]'):
-                                st.warning("Please provide your api key first!")
-                            else:
-                                sender = ['human', 'ai']
-                                sql_conn.insert_chat(st.session_state["selected_conversation_id"][0], sender[0], question)
-                                sql_conn.insert_chat(st.session_state["selected_conversation_id"][0], sender[1], output)
-                            
-                            # Đổi tên conversation nêu tên vẫn còn là new conversation
-                            conversation_name = sql_conn.get_conversation_name_from_conversationid(st.session_state["selected_conversation_id"][0])
-                            if conversation_name == "New conversation":
-                                rename_conversation_endpoint = os.getenv("RENAME_CONVERSATION")
-                                data_for_rename = {
-                                    "history": f"(human:{question[:200]}); (ai: {output[:500]})",
-                                    "admin_department": st.session_state["admin_department"]
-                                }
-                                new_name = requests.post(rename_conversation_endpoint, json=data_for_rename)
-                                sql_conn.change_conversation_name(st.session_state["selected_conversation_id"][0],
-                                                                  new_name.json().strip('"'))
-                                st.session_state["conversations_user_text"] = sql_conn.get_conversation_session_user_textfile(st.session_state["selected_conversation_id"][1])
-                                st.rerun()
-                    else:
-                        st.warning("Please select a conversation first!")
-                css_chat_message_container = float_css_helper(bottom="80px", top="70px", overflow_y="auto")
-                messages_container.float(css_chat_message_container)
-
-            with col3:
+                st.write("---")
                 st.markdown(f'Prompt Template is using: {st.session_state["title_prompt_template_user"]}')
-                col_1, col_2 = st.columns([3, 1.5])
+                col_1, col_2 = st.columns([3, 1])
                 with col_1:
                     if st.session_state["title_prompt_template_user"] == "Normal QA":
                         with st.popover("Normal QA", use_container_width=True):
@@ -887,7 +842,7 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
                         with st.popover("Chat with document", use_container_width=True):
                             st.markdown(f"{PROMPT_TEMPLATE}")
                 with col_2:
-                    if st.button("Switch", key='switch_prompt_template'):
+                    if st.button("", key='switch_prompt_template', icon=":material/change_circle:", use_container_width=True):
                         if st.session_state["title_prompt_template_user"] == "Normal QA":
                             st.session_state["prompt_template_user"] = PROMPT_TEMPLATE
                             st.session_state["title_prompt_template_user"] = "Chat with document"
@@ -895,7 +850,140 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
                             st.session_state["prompt_template_user"] = " "
                             st.session_state["title_prompt_template_user"] = "Normal QA"
                         st.rerun()
-            col3.float()
+            css_col2 = float_css_helper(top="70px")
+            col2.float(css_col2)
+
+            with bottom():
+                input_col, empty_col = st.columns([8, 1.4], vertical_alignment="top")
+                with input_col:
+                    chat_input_container = st.container()
+                    with chat_input_container:
+                        st.session_state["question"] = st.chat_input("What do you want to know?")
+                    css_chat_input_container = float_css_helper(bottom="35px", z_index="100")
+                    chat_input_container.float(css_chat_input_container)
+
+            with col1:
+                if "selected_conversation_id" in st.session_state and st.session_state["selected_conversation_id"][0] not in st.session_state["conversations_user_text"]:
+                    del st.session_state["selected_conversation_id"]
+                    del st.session_state["messages"]
+
+                # Phần hiển thị chat
+                # Hiển thị lịch sử hội thoại của phiên đã chọn
+                if "messages" not in st.session_state:
+                    st.session_state.messages = []
+
+                if "selected_conversation_id" in st.session_state:
+                    chat_history = sql_conn.get_chat_history(st.session_state["selected_conversation_id"][0])
+                    st.session_state.messages = []
+                    # Cập nhật tin nhắn vào session_state.messages nếu có lịch sử
+                    if chat_history:
+                        st.session_state.messages = [
+                            {"role": "user" if sender == "human" else "assistant", "output": message}
+                            for sender, message in chat_history
+                        ]
+
+                # Hiển thị các tin nhắn trong phiên hội thoại đã chọn
+                if "messages" in st.session_state:
+                    for message in st.session_state.messages:
+                        with st.chat_message(message["role"]):
+                            st.markdown(message["output"])
+                # try:
+                if "selected_conversation_id" in st.session_state:
+                    # Gửi tin nhắn mới trong giao diện chat
+                    if st.session_state["question"]:
+                        st.chat_message("user").markdown(st.session_state["question"])
+                        st.session_state.messages.append({"role": "user", "output": st.session_state["question"]})
+
+                        with st.chat_message("assistant"):
+                            assistant_message = st.empty()
+
+                            prompt_template = st.session_state["prompt_template_user"]
+                            response_stream = handler_input_user(
+                                st.session_state["question"], st.session_state["selected_conversation_id"][0],
+                                st.session_state["user_id"], USER_URL, st.session_state.model, prompt_template,
+                                st.session_state["admin_department"], st.session_state["selected_conversation_id"][1] or "",
+                                st.session_state["selected_conversation_id"][3] or "")
+
+                            # Stream and display the assistant's response
+                            output = ""
+                            for token in response_stream:
+                                output += token
+                                assistant_message.markdown(output)
+                                time.sleep(0.01)
+                            st.session_state.messages.append({"role": "assistant", "output": output})
+
+                        if output.startswith('Error'):
+                            st.warning("Please provide your api key first!")
+                        else:
+                            sql_conn.insert_chat(st.session_state["selected_conversation_id"][0], 'human', st.session_state["question"])
+                            sql_conn.insert_chat(st.session_state["selected_conversation_id"][0], 'ai', output)
+
+                            # Đổi tên conversation nêu tên vẫn còn là new conversation
+                            conversation_name = sql_conn.get_conversation_name_from_conversationid(st.session_state["selected_conversation_id"][0])
+                            if conversation_name == "New conversation":
+                                rename_conversation_endpoint = os.getenv("RENAME_CONVERSATION")
+                                data_for_rename = {
+                                    "history": f"(human:{st.session_state['question'][:200]}); (ai: {output[:500]})",
+                                    "admin_department": st.session_state["admin_department"]
+                                }
+                                new_name = requests.post(rename_conversation_endpoint, json=data_for_rename)
+                                try:
+                                    sql_conn.change_conversation_name(st.session_state["selected_conversation_id"][0],
+                                                                      new_name.json().strip('"'))
+                                except:
+                                    pass
+                                st.rerun()
+
+                else:
+                    if st.session_state["question"]:
+                        # create a conversation first
+                        conversation_name = "New conversation"
+                        conversation_id = "cv" + datetime.now().strftime("%Y%m%d%H%m") + secrets.token_hex(3)
+                        sql_conn.create_conversation_user_textfile_non_folder(conversation_id, conversation_name,
+                                                                              st.session_state["user_id"])
+                        st.session_state["selected_conversation_id"] = (conversation_id, None, None, None)
+                        st.session_state["conversations_user_text"].append(conversation_id)
+
+                        st.chat_message("user").markdown(st.session_state["question"])
+                        st.session_state.messages.append({"role": "user", "output": st.session_state["question"]})
+                        with st.chat_message("assistant"):
+                            assistant_message = st.empty()
+
+                            prompt = ""
+                            response_stream = handler_input_user(
+                                st.session_state["question"], st.session_state["selected_conversation_id"][0],
+                                st.session_state["user_id"], USER_URL, st.session_state.model, prompt,
+                                st.session_state["admin_department"], "", ""
+                            )
+                            # Stream and display the assistant's response
+                            output = ""
+                            for token in response_stream:
+                                output += token
+                                assistant_message.markdown(output)
+                                time.sleep(0.01)
+                            st.session_state.messages.append({"role": "assistant", "output": output})
+
+                        if output.startswith('Error'):
+                            st.warning("Please provide your api key first!")
+                        else:
+                            sql_conn.insert_chat(st.session_state["selected_conversation_id"][0], 'human', st.session_state["question"])
+                            sql_conn.insert_chat(st.session_state["selected_conversation_id"][0], 'ai', output)
+
+                        # Đổi tên conversation nêu tên vẫn còn là new conversation
+                        conversation_name = sql_conn.get_conversation_name_from_conversationid(st.session_state["selected_conversation_id"][0])
+                        if conversation_name == "New conversation":
+                            rename_conversation_endpoint = os.getenv("RENAME_CONVERSATION")
+                            data_for_rename = {
+                                "history": f"(human:{st.session_state['question'][:200]}); (ai: {output[:500]})",
+                                "admin_department": st.session_state["admin_department"]
+                            }
+                            new_name = requests.post(rename_conversation_endpoint, json=data_for_rename)
+                            try:
+                                sql_conn.change_conversation_name(st.session_state["selected_conversation_id"][0],
+                                                                  new_name.json().strip('"'))
+                            except:
+                                pass
+                            st.rerun()
 
         def Chat_With_CSVFile():
             with st.sidebar:
@@ -981,83 +1069,81 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
                 else:
                     st.warning("No user conversation sessions available.")
             
-            col_1, col_chat, col3 = st.columns([1.15, 5, 2], vertical_alignment="top")
+            col_chat, empty_col = st.columns([8, 1.4], vertical_alignment="top")
             st.session_state.model = 'gpt-4o-mini'
+            with bottom():
+                input_col, empty_col = st.columns([8, 1.4], vertical_alignment="top")
+                with input_col:
+                    chat_input_container = st.container()
+                    with chat_input_container:
+                        question = st.chat_input("What do you want to know?")
+                    css_chat_input_container = float_css_helper(bottom="35px", z_index="100")
+                    chat_input_container.float(css_chat_input_container)
+
             with col_chat:
                 if "selected_conversation_id" in st.session_state and st.session_state["selected_conversation_id"] not in [i[0] for i in st.session_state["conversations_user_csv"]]:
                     del st.session_state["selected_conversation_id"]
                     del st.session_state["messages"]
-                chat_input_container = st.container()
-                with chat_input_container:
-                    question = st.chat_input("What do you want to know?")
-                css = float_css_helper(bottom="35px")
-                chat_input_container.float(css)
 
-                messages_container = st.container(height=800, border=False)
-                with messages_container:
-                    # Hiển thị lịch sử hội thoại của phiên đã chọn
-                    if "messages" not in st.session_state:
-                        st.session_state.messages = []
+                # Hiển thị lịch sử hội thoại của phiên đã chọn
+                if "messages" not in st.session_state:
+                    st.session_state.messages = []
 
-                    if "selected_conversation_id" in st.session_state:
-                        chat_history = sql_conn.get_chat_history(st.session_state["selected_conversation_id"])
-                        st.session_state.messages = []
-                        # Cập nhật tin nhắn vào session_state.messages nếu có lịch sử
-                        if chat_history:
-                            st.session_state.messages = [
-                                {"role": "user" if sender == "human" else "assistant", "output": message}
-                                for sender, message in chat_history
-                            ]
+                if "selected_conversation_id" in st.session_state:
+                    chat_history = sql_conn.get_chat_history(st.session_state["selected_conversation_id"])
+                    st.session_state.messages = []
+                    # Cập nhật tin nhắn vào session_state.messages nếu có lịch sử
+                    if chat_history:
+                        st.session_state.messages = [
+                            {"role": "user" if sender == "human" else "assistant", "output": message}
+                            for sender, message in chat_history
+                        ]
 
-                    # Hiển thị các tin nhắn trong phiên hội thoại đã chọn
-                    if "messages" in st.session_state:
-                        for message in st.session_state.messages:
-                            with st.chat_message(message["role"]):
-                                st.markdown(message["output"])
-                    # try:
-                    if "selected_conversation_id" in st.session_state:
-                            # Gửi tin nhắn mới trong giao diện chat
-                        if question:
-                            st.chat_message("user").markdown(question)
-                            st.session_state.messages.append({"role": "user", "output": question})
+                # Hiển thị các tin nhắn trong phiên hội thoại đã chọn
+                if "messages" in st.session_state:
+                    for message in st.session_state.messages:
+                        with st.chat_message(message["role"]):
+                            st.markdown(message["output"])
+                # try:
+                if "selected_conversation_id" in st.session_state:
+                        # Gửi tin nhắn mới trong giao diện chat
+                    if question:
+                        st.chat_message("user").markdown(question)
+                        st.session_state.messages.append({"role": "user", "output": question})
 
-                            with st.chat_message("assistant"):
-                                try:
-                                    assistant_message = st.empty()
-                                    output = handler_input_csv(question, st.session_state["user_id"], CSV_QA_URL,
-                                                               st.session_state.model)
-                                    assistant_message.markdown(output)
-                                    st.session_state.messages.append({"role": "assistant", "output": output})
+                        with st.chat_message("assistant"):
+                            try:
+                                assistant_message = st.empty()
+                                output = handler_input_csv(question, st.session_state["user_id"], CSV_QA_URL,
+                                                           st.session_state.model)
+                                assistant_message.markdown(output)
+                                st.session_state.messages.append({"role": "assistant", "output": output})
 
-                                    sender = ['human', 'ai']
-                                    sql_conn.insert_chat(st.session_state["selected_conversation_id"], sender[0], question)
-                                    sql_conn.insert_chat(st.session_state["selected_conversation_id"], sender[1], output)
+                                sender = ['human', 'ai']
+                                sql_conn.insert_chat(st.session_state["selected_conversation_id"], sender[0], question)
+                                sql_conn.insert_chat(st.session_state["selected_conversation_id"], sender[1], output)
 
-                                except:
-                                    output = "Please upload csv file first!"
-                                    st.warning("Please upload csv file first!")
+                            except:
+                                output = "Please upload csv file first!"
+                                st.warning("Please upload csv file first!")
 
-                            # Đổi tên conversation nêu tên vẫn còn là new conversation
-                            conversation_name = sql_conn.get_conversation_name_from_conversationid(
-                                st.session_state["selected_conversation_id"])
-                            if conversation_name == "New conversation":
-                                rename_conversation_endpoint = os.getenv("RENAME_CONVERSATION")
-                                data_for_rename = {
-                                    "history": f"(human:{question[:200]}); (ai: {output[:500]})",
-                                    "admin_department": st.session_state["admin_department"]
-                                }
-                                new_name = requests.post(rename_conversation_endpoint, json=data_for_rename)
-                                sql_conn.change_conversation_name(
-                                    st.session_state["selected_conversation_id"], new_name.json().strip('"'))
-
-                                st.session_state[
-                                    "conversations_user_text"] = sql_conn.get_conversation_session_user_csvfile(
-                                    st.session_state["user_id"])
-                                st.rerun()
-                    else:
-                        st.warning("Please select a conversation first!")
-                css_chat_message_container = float_css_helper(bottom="80px", top="70px", overflow_y="auto")
-                messages_container.float(css_chat_message_container)
+                        # Đổi tên conversation nêu tên vẫn còn là new conversation
+                        conversation_name = sql_conn.get_conversation_name_from_conversationid(
+                            st.session_state["selected_conversation_id"])
+                        if conversation_name == "New conversation":
+                            rename_conversation_endpoint = os.getenv("RENAME_CONVERSATION")
+                            data_for_rename = {
+                                "history": f"(human:{question[:200]}); (ai: {output[:500]})",
+                                "admin_department": st.session_state["admin_department"]
+                            }
+                            new_name = requests.post(rename_conversation_endpoint, json=data_for_rename)
+                            try:
+                                sql_conn.change_conversation_name(st.session_state["selected_conversation_id"], new_name.json().strip('"'))
+                            except:
+                                pass
+                            st.rerun()
+                else:
+                    st.warning("Please select a conversation first!")
 
         pg = st.navigation({"System": [st.Page(Chat_Session)], "User": [st.Page(Chat_With_Files),
                             st.Page(Chat_With_CSVFile, title="Chat With CSVFile (Beta)")]})
@@ -1279,7 +1365,7 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
                             new_prompt = st.text_area("Project Context & Instructions:", value=folder[2],
                                                       key="text_area"+f"{folder[0]}", max_chars=10000)
                             
-                            #nếu user không nhập nội dung mới mà lỡ bấm save thì vẫn giữ nguyên nội dung cũ
+                            # nếu user không nhập nội dung mới mà lỡ bấm save thì vẫn giữ nguyên nội dung cũ
                             if len(new_name) == 0:
                                 new_name = folder[1]
                             if len(new_prompt) == 0:

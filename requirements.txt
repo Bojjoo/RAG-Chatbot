@@ -20,3 +20,4 @@ faiss-cpu
 rank_bm25
 python-docx
 tabulate
+streamlit_extras

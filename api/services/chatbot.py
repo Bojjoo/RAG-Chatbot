@@ -6,7 +6,6 @@ class ChatBot:
         self.model_llm = None
         self.openai_apikey = openai_apikey
         self.gemini_apikey = gemini_apikey
-        # apikey cho embedding và reformulate question dùng chung với nhau 
         self.model_reformulate_question = ChatOpenAI(temperature=TEMPERATURE, model=MODEL_LLM, api_key=openai_embedding_key)
         self.sender = ['human', 'ai']
 

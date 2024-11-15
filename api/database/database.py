@@ -29,6 +29,14 @@ class SQLDatabase:
         self.cur.execute(f"select conversation_id, conversation_name from conversations_user where folder_id='{folder_id}' and type='text_file' order by start_time")
         a = self.cur.fetchall()
         return a
+
+    def get_conversation_session_user_textfile_non_folder(self, user_id):
+        self.cur.execute(f"""select conversation_id, conversation_name 
+from conversations_user cu join folders_user fu
+on cu.folder_id = fu.folder_id
+where user_id='{user_id}' and type='text_file' and fu.folder_id like 'u_non_folder%' order by start_time""")
+        a = self.cur.fetchall()
+        return a
     
     def get_conversation_session_user_csvfile(self, user_id):
         self.cur.execute(f"""
@@ -44,18 +52,23 @@ where fu.folder_id like 'u_csv_folder%' and user_id='{user_id}' and type='csv_fi
         a = self.cur.fetchall()
         return a
 
-    # Lấy ra conversation_id của từng phần (system, user)
-    def get_conversationid_system(self, user_id):
-        self.cur.execute(f"select conversation_id from conversations_system where user_id='{user_id}'")
-        return self.cur.fetchall()
+    def get_conversation_session_system_non_folder(self, user_id):
+        self.cur.execute(f"select conversation_id, conversation_name from conversations_system where user_id='{user_id}' and folder_id is Null order by start_time")
+        a = self.cur.fetchall()
+        return a
 
-    def get_conversationid_user_textfile(self, folder_id):
-        self.cur.execute(f"select conversation_id from conversations_user where folder_id='{folder_id}' and type='text_file'")
-        return self.cur.fetchall()
-    
-    def get_conversationid_user_csvfile(self, user_id):####################################################
-        self.cur.execute(f"select conversation_id from conversations_user where user_id='{user_id}' and type='csv_file'")
-        return self.cur.fetchall()
+    # # Lấy ra conversation_id của từng phần (system, user)
+    # def get_conversationid_system(self, user_id):
+    #     self.cur.execute(f"select conversation_id from conversations_system where user_id='{user_id}'")
+    #     return self.cur.fetchall()
+    #
+    # def get_conversationid_user_textfile(self, folder_id):
+    #     self.cur.execute(f"select conversation_id from conversations_user where folder_id='{folder_id}' and type='text_file'")
+    #     return self.cur.fetchall()
+    #
+    # def get_conversationid_user_csvfile(self, user_id):####################################################
+    #     self.cur.execute(f"select conversation_id from conversations_user where user_id='{user_id}' and type='csv_file'")
+    #     return self.cur.fetchall()
 
     # Lấy conversation name dựa vào conversation id
     def get_conversation_name_from_conversationid(self, conversation_id):
@@ -75,11 +88,15 @@ where fu.folder_id like 'u_csv_folder%' and user_id='{user_id}' and type='csv_fi
             f"""INSERT INTO conversations_user(conversation_id, conversation_name, folder_id, type)
             VALUES ('{conversation_id}', '{conversation_name}', '{folder_id}', '{type}')""")
 
+    def create_conversation_user_textfile_non_folder(self, conversation_id, conversation_name, user_id):
+        type = "text_file"
+        self.cur.execute(f"""insert into conversations_user(conversation_id, conversation_name, folder_id, type)
+VALUES ('{conversation_id}', '{conversation_name}', (select folder_id from folders_user where user_id='{user_id}' and folder_id like 'u_non_folder%'), '{type}')""")
+
     def create_conversation_csvfile(self, conversation_name, user_id):
         type = "csv_file"
         conversation_id = "cv" + datetime.now().strftime("%Y%m%d%H%m") + secrets.token_hex(3)
-        self.cur.execute(
-                        f"""insert into conversations_user(conversation_id, conversation_name, folder_id, type)
+        self.cur.execute(f"""insert into conversations_user(conversation_id, conversation_name, folder_id, type)
 VALUES ('{conversation_id}', '{conversation_name}', (select folder_id from folders_user where user_id='{user_id}' and folder_id like 'u_csv_folder%'), '{type}')""")
     
     def create_conversation_system(self, conversation_name, user_id, folder_id):
@@ -87,6 +104,11 @@ VALUES ('{conversation_id}', '{conversation_name}', (select folder_id from folde
         self.cur.execute(
             f"""INSERT INTO conversations_system(conversation_id, conversation_name, user_id, folder_id)
             VALUES ('{conversation_id}', '{conversation_name}', '{user_id}', '{folder_id}')""")
+
+    def create_conversation_system_non_folder(self, conversation_id, conversation_name, user_id):
+        self.cur.execute(
+            f"""INSERT INTO conversations_system(conversation_id, conversation_name, user_id)
+            VALUES ('{conversation_id}', '{conversation_name}', '{user_id}')""")
 
     # Đổi tên conversation
     def change_conversation_name(self, conversation_id, new_name):
@@ -120,6 +142,13 @@ VALUES ('{conversation_id}', '{conversation_name}', (select folder_id from folde
 
     # Quản lý folder của users
     def add_folder_user(self, folder_id, folder_name, user_id, prompt):
+        query = "insert into folders_user(folder_id, folder_name, user_id, prompt) values(%s, %s, %s, %s)"
+        self.cur.execute(query, (folder_id, folder_name, user_id, prompt))
+
+    def add_folder_user_textfile_non_folder(self, user_id):
+        folder_id = "u_non_folder" + secrets.token_hex(4)
+        folder_name = f"{user_id} non_folder"
+        prompt = ""
         query = "insert into folders_user(folder_id, folder_name, user_id, prompt) values(%s, %s, %s, %s)"
         self.cur.execute(query, (folder_id, folder_name, user_id, prompt))
 

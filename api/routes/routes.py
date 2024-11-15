@@ -69,9 +69,12 @@ async def get_answer_about_users_data(question_request: QuestionRequest):
             gemini_apikey=apikeys_cache[question_request.admin_department]["geminikey"],
             openai_embedding_key=openai_embedding_apikey_cache[question_request.admin_department]
         )
-
-    user_retriever = retriever_cache[f'{question_request.user_id}'][f'{question_request.folder_id}']
-    user_bm25_retriever = bm25_retriever_cache[f'{question_request.user_id}'][f'{question_request.folder_id}']
+    try:
+        user_retriever = retriever_cache[f'{question_request.user_id}'][f'{question_request.folder_id}']
+        user_bm25_retriever = bm25_retriever_cache[f'{question_request.user_id}'][f'{question_request.folder_id}']
+    except:
+        user_retriever = None
+        user_bm25_retriever = None
 
     prompt = await bot.question_handler(user_retriever, user_bm25_retriever, question_request)
     if question_request.model in model_openai:
@@ -92,9 +95,13 @@ async def get_response(question_request: QuestionRequest) -> StreamingResponse:
         gemini_apikey=apikeys_cache[question_request.admin_department]["geminikey"] if question_request.model in model_gemini else None,
         openai_embedding_key=openai_embedding_apikey_cache[question_request.admin_department]
     )
-
-    system_retriever = retriever_cache_admin[f'{question_request.admin_department}'][f'{question_request.folder_id}']
-    system_bm25_retriever = bm25_retriever_cache_admin[f'{question_request.admin_department}'][f'{question_request.folder_id}']
+    # nếu folder_id được truyền về thì lấy ra retriever cho folder_id đó, ngược lại để None
+    try:
+        system_retriever = retriever_cache_admin[f'{question_request.admin_department}'][f'{question_request.folder_id}']
+        system_bm25_retriever = bm25_retriever_cache_admin[f'{question_request.admin_department}'][f'{question_request.folder_id}']
+    except:
+        system_retriever = None
+        system_bm25_retriever = None
 
     prompt = await bot.question_handler_system(system_retriever, system_bm25_retriever, question_request)
     generator = bot.send_message_openai(prompt, question_request.model) if question_request.model in model_openai \
