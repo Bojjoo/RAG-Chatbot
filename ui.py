@@ -507,9 +507,9 @@ if st.session_state["authenticated"]:
                 with model_selection:
                     option = st.selectbox(
                         label="",
-                        options=("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"
-                                 , "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro", "gemini-1.5-flash-002"
-                                 , "gemini-1.5-pro-002", "gemini-1.5-flash-8b"),
+                        options=("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo",
+                                 "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro", "gemini-1.5-flash-002",
+                                 "gemini-1.5-pro-002", "gemini-1.5-flash-8b"),
                         index=None,
                         placeholder="gpt-4o-mini",
                     )
@@ -527,7 +527,6 @@ if st.session_state["authenticated"]:
                     chat_input_container.float(css_chat_input_container)
 
             # Chat session
-            #with col1:
             if "selected_conversation_id" in st.session_state and st.session_state["selected_conversation_id"][0] not in st.session_state["conversations_system"]:
                 del st.session_state["selected_conversation_id"]
                 del st.session_state["messages"]
@@ -592,7 +591,7 @@ if st.session_state["authenticated"]:
                         st.session_state.messages.append({"role": "assistant", "output": output})
 
                     if output.startswith('Error'):
-                        st.warning("Please provide your api key first!")
+                        st.warning("Missing API key! Contact your admin to provide API key!")
                     else:
                         sender = ['human', 'ai']
                         sql_conn.insert_chat_system(st.session_state["selected_conversation_id"][0], sender[0], st.session_state["question"])
@@ -659,7 +658,6 @@ if st.session_state["authenticated"]:
                                         st.markdown(f'<div style="text-align:left;">{st.session_state["folders"][index][3]}</div>',
                                                     unsafe_allow_html=True)
 
-
                 if st.session_state["question"]:
                     # create a conversation first
                     conversation_name = "New conversation"
@@ -690,7 +688,7 @@ if st.session_state["authenticated"]:
                         st.session_state.messages.append({"role": "assistant", "output": output})
 
                     if output.startswith('Error'):
-                        st.warning("Please provide your api key first!")
+                        st.warning("Missing API key! Contact your admin to provide API key!")
                     else:
                         sender = ['human', 'ai']
                         sql_conn.insert_chat_system(st.session_state["selected_conversation_id"][0], sender[0], st.session_state["question"])
@@ -1027,7 +1025,7 @@ However, it could increase the token usage and take longer time.""", icon="â„¹ï¸
             col2.float(css_col2)
 
             with bottom():
-                input_col, empty_col = st.columns([8, 1.4], vertical_alignment="top")
+                empty_col_1, input_col, empty_col = st.columns([1.25, 8, 1.25], vertical_alignment="top")
                 with input_col:
                     chat_input_container = st.container()
                     with chat_input_container:
@@ -1086,7 +1084,7 @@ However, it could increase the token usage and take longer time.""", icon="â„¹ï¸
                             st.session_state.messages.append({"role": "assistant", "output": output})
 
                         if output.startswith('Error'):
-                            st.warning("Please provide your api key first!")
+                            st.warning("Missing API key! Contact your admin to provide API key!")
                         else:
                             sql_conn.insert_chat(st.session_state["selected_conversation_id"][0], 'human', st.session_state["question"])
                             sql_conn.insert_chat(st.session_state["selected_conversation_id"][0], 'ai', output)
@@ -1137,7 +1135,7 @@ However, it could increase the token usage and take longer time.""", icon="â„¹ï¸
                             st.session_state.messages.append({"role": "assistant", "output": output})
 
                         if output.startswith('Error'):
-                            st.warning("Please provide your api key first!")
+                            st.warning("Missing API key! Contact your admin to provide API key!")
                         else:
                             sql_conn.insert_chat(st.session_state["selected_conversation_id"][0], 'human', st.session_state["question"])
                             sql_conn.insert_chat(st.session_state["selected_conversation_id"][0], 'ai', output)
@@ -1201,10 +1199,11 @@ However, it could increase the token usage and take longer time.""", icon="â„¹ï¸
                             delete_file_endpoint = os.getenv("DELETE_CSV_FILE")
                             if st.button(label="", icon=":material/delete:", key="delete"+f"{file}{i}",
                                          use_container_width=True):
-                                delete_file_data = {"file_name": file,
+                                delete_file_data = {
+                                        "file_name": file,
                                         "user_id": st.session_state["user_id"],
                                         "admin_department": st.session_state["admin_department"]
-                                        }
+                                    }
                                 response = requests.delete(delete_file_endpoint, json=delete_file_data)
                                 st.session_state["csv_file"] = response.json()
                                 st.success(f"{file} deleted successfully!")
@@ -1245,7 +1244,7 @@ However, it could increase the token usage and take longer time.""", icon="â„¹ï¸
             col_chat, empty_col = st.columns([8, 1.4], vertical_alignment="top")
             st.session_state.model = 'gpt-4o-mini'
             with bottom():
-                input_col, empty_col = st.columns([8, 1.4], vertical_alignment="top")
+                empty_col_1, input_col, empty_col = st.columns([1.25, 8, 1.25], vertical_alignment="top")
                 with input_col:
                     chat_input_container = st.container()
                     with chat_input_container:

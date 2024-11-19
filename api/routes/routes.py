@@ -44,10 +44,12 @@ def delete_folder_user(folder: FolderUser):
 async def upload_file(file: UploadFile = File(...), user_id: str = Form(...), folder_id: str = Form(),
                       semantic_chunking: bool = Form()):
     admin_department = sql_conn.get_admin_department(user_id)
-    vectorstore = VectorStore(user_id, folder_id, openai_embedding_key=openai_embedding_apikey_cache[f"{admin_department}"])
+    vectorstore = VectorStore(user_id, folder_id,
+                              openai_embedding_key=openai_embedding_apikey_cache[f"{admin_department}"])
     chunks = vectorstore.upload_file(file, user_id, folder_id, semantic_chunking)
 
-    new_vectorstore = VectorStore(user_id, folder_id, openai_embedding_key=openai_embedding_apikey_cache[f"{admin_department}"])
+    new_vectorstore = VectorStore(user_id, folder_id,
+                                  openai_embedding_key=openai_embedding_apikey_cache[f"{admin_department}"])
     return chunks
 
 
@@ -260,10 +262,12 @@ def get_apikey_admin(admin_department: AdminID):
 @router.post('/upload_data_admin/')
 async def upload_file_admin(file: UploadFile = File(...), admin_department: str = Form(...), folder_id: str = Form(...),
                             semantic_chunking: bool = Form()):
-    vectorstore = VectorStoreAdmin(admin_department, folder_id, openai_embedding_key=openai_embedding_apikey_cache[f"{admin_department}"])
+    vectorstore = VectorStoreAdmin(admin_department, folder_id,
+                                   openai_embedding_key=openai_embedding_apikey_cache[f"{admin_department}"])
     chunks = vectorstore.upload_file(file, admin_department, folder_id, semantic_chunking)
 
-    new_vectorstore = VectorStoreAdmin(admin_department, folder_id, openai_embedding_key=openai_embedding_apikey_cache[f"{admin_department}"])
+    new_vectorstore = VectorStoreAdmin(admin_department, folder_id,
+                                       openai_embedding_key=openai_embedding_apikey_cache[f"{admin_department}"])
 
     return chunks
 
@@ -273,7 +277,8 @@ def delete_file_admin(file: FileDeleteAdmin):
     admin_department = file.admin_department
     file_name = file.file_name
     folder_id = file.folder_id
-    vectorstore = VectorStoreAdmin(admin_department, folder_id, openai_embedding_key=openai_embedding_apikey_cache[f"{admin_department}"])
+    vectorstore = VectorStoreAdmin(admin_department, folder_id,
+                                   openai_embedding_key=openai_embedding_apikey_cache[f"{admin_department}"])
     try:
         vectorstore.delete_from_vectorstore(file_name, admin_department, folder_id)
         return 1
@@ -295,7 +300,8 @@ def delete_folder(folder: Folder):
 
 @router.post('/add_prompt_template_admin/')
 async def add_prompt_template_admin(prompt_template: PromptTemplateAdmin):
-    sql_conn.add_prompt_template_admin(prompt_template.title, prompt_template.prompt_text, prompt_template.admin_department)
+    sql_conn.add_prompt_template_admin(prompt_template.title, prompt_template.prompt_text,
+                                       prompt_template.admin_department)
 
 
 @router.post('/test_key/')
