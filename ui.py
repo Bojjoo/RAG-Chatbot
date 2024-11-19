@@ -1339,10 +1339,10 @@ However, it could increase the token usage and take longer time.""", icon="â„¹ï¸
                         st.image(logo)
                     with col2:
                         if name == "openaikey":
-                            st.session_state["openaikey"] = st.text_input(label="OpenAI API Key:",
+                            st.session_state["openaikey"] = st.text_input(label="OpenAI API Key:", type="password",
                                                                           placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxx")
                         else:
-                            st.session_state["geminikey"] = st.text_input(label="Google Gemini API Key:",
+                            st.session_state["geminikey"] = st.text_input(label="Google Gemini API Key:", type="password",
                                                                           placeholder="AIxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
                     with col3:
                         if st.button(label="", icon=":material/send:", key="key"+name):
@@ -1389,7 +1389,7 @@ However, it could increase the token usage and take longer time.""", icon="â„¹ï¸
                 with col1:
                     st.image("./logo/gpt-4.webp")
                 with col2:
-                    st.session_state["openai_embedding_key"] = st.text_input(label="OpenAI API Embedding Key:",
+                    st.session_state["openai_embedding_key"] = st.text_input(label="OpenAI API Embedding Key:", type="password",
                                                                              placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxxx")
                 with col3:
                     if st.button(label="", icon=":material/send:", key="send_openai_embedding_key"):
