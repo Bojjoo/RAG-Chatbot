@@ -3,6 +3,8 @@ langchain_openai
 langchain_community
 langchain_experimental
 langchain_google_genai
+langchain_google_community
+langchain_core
 flashrank
 openai
 PyPDF2

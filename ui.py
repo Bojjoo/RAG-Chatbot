@@ -36,7 +36,7 @@ SYSTEM_RETRIEVER = os.getenv("SYSTEM_RETRIEVER")
 
 
 def handler_input_user(question, conversation_id, user_id, url, model, prompt_template,
-                       admin_department, folder_id, prompt_folder):
+                       admin_department, folder_id, prompt_folder, search_tool):
     question_data = {
         "question": question,
         "conversation_id": conversation_id,
@@ -45,20 +45,20 @@ def handler_input_user(question, conversation_id, user_id, url, model, prompt_te
         "model": model,
         "admin_department": admin_department,
         "folder_id": folder_id,
-        "prompt_folder": prompt_folder
+        "prompt_folder": prompt_folder,
+        "search_tool": search_tool
     }
     response = requests.post(url=url, json=question_data, stream=True)
 
     if response.status_code == 200:
         for chunk in response.iter_content(chunk_size=1024, decode_unicode=True):
-            # if chunk:
             yield chunk
     else:
         yield f"Error: {response.status_code} - {response.reason}"
 
 
 def handler_input_system(question, conversation_id, user_id, url, model,
-                         admin_department, folder_id, prompt_template, prompt_folder):
+                         admin_department, folder_id, prompt_template, prompt_folder, search_tool):
     question_data = {
         "question": question,
         "conversation_id": conversation_id,
@@ -67,13 +67,13 @@ def handler_input_system(question, conversation_id, user_id, url, model,
         "model": model,
         "admin_department": admin_department,
         "folder_id": folder_id,
-        "prompt_folder": prompt_folder
+        "prompt_folder": prompt_folder,
+        "search_tool": search_tool
     }
     response = requests.post(url=url, json=question_data, stream=True)
 
     if response.status_code == 200:
         for chunk in response.iter_content(chunk_size=1024, decode_unicode=True):
-            # if chunk:
             yield chunk
     else:
         yield f"Error: {response.status_code} - {response.reason}"
@@ -245,18 +245,8 @@ if not st.session_state["authenticated"]:
                                                                                st.session_state["admin_department"],
                                                                                i[0])
                                         st.session_state["update_retriever"] = False
-
-                                        # Lấy file csv của user đã upload
-                                        get_csv_file_endpoint = os.getenv("GET_CSV_FILE")
-                                        get_csv_data = {
-                                            "user_id": st.session_state["user_id"],
-                                            "admin_department": st.session_state["admin_department"]
-                                        }
-                                        response = requests.get(get_csv_file_endpoint, json=get_csv_data)
-                                        if response.json() == 0:
-                                            pass
-                                        else:
-                                            st.session_state["csv_file"] = response.json()
+                                        st.session_state["google_api_key"] = False
+                                        st.session_state["serper_api_key"] = False
 
                                         st.session_state["User_login"] = True
 
@@ -322,6 +312,24 @@ if not st.session_state["authenticated"]:
                                 st.session_state["csv_file"] = response.json()
 
                             st.session_state["User_login"] = True
+
+                            # check đã có key web search chưa
+                            check_gg_websearch_key = {
+                                "user_id": st.session_state["user_id"],
+                                "admin_department": st.session_state["admin_department"]
+                            }
+                            gg_key_status = requests.get(url=os.getenv("CHECK_WEBSEARCH_GOOGLE_API"),
+                                                          json=check_gg_websearch_key)
+                            st.session_state["google_api_key"] = True if gg_key_status.json() == 1 else False
+
+                            check_serper_key = {
+                                "user_id": st.session_state["user_id"],
+                                "admin_department": st.session_state["admin_department"]
+                            }
+
+                            serper_key_status = requests.get(url=os.getenv("CHECK_WEBSEARCH_SERPER_API"),
+                                                             json=check_serper_key)
+                            st.session_state["serper_api_key"] = True if serper_key_status.json() == 1 else False
 
                             st.rerun()
 
@@ -437,6 +445,7 @@ if st.session_state["authenticated"]:
                 st.session_state["prompt_template"] = PROMPT_TEMPLATE
             if "title_prompt_template" not in st.session_state:
                 st.session_state["title_prompt_template"] = "Chat with document"
+
             with st.sidebar:
                 st.info(f"Nice to meet you: {st.session_state['user_name']}", icon=":material/sentiment_satisfied:")
                 st.session_state["folders"] = sql_conn.get_folders(st.session_state["admin_department"])
@@ -501,8 +510,8 @@ if st.session_state["authenticated"]:
 
             # Select model
             st.session_state.model = 'gpt-4o-mini'
-            col1, col2 = st.columns([1.5, 8], vertical_alignment="top")
-            with col1:
+            model_selection_col, plugin_col, col3 = st.columns([1.5, 1.5, 6.5], vertical_alignment="top")
+            with model_selection_col:
                 model_selection = st.container()
                 with model_selection:
                     option = st.selectbox(
@@ -515,8 +524,69 @@ if st.session_state["authenticated"]:
                     )
                     if option:
                         st.session_state.model = option
-            css_col2 = float_css_helper(top="0px", z_index="100")
-            col1.float(css_col2)
+            with plugin_col:
+                if "search_tool" not in st.session_state:
+                    st.session_state["search_tool"] = None
+                if "google_search" not in st.session_state:
+                    st.session_state.google_search = False
+                if "serper_search" not in st.session_state:
+                    st.session_state.serper_search = False
+                with st.popover("Plugin", icon=":material/extension:"):
+                    def on_google_search_change():
+                        if not st.session_state["google_api_key"]:
+                            @st.dialog("Add your Google search API key")
+                            def add_google_key():
+                                search_id = st.text_input("Search Engine ID")
+                                search_key = st.text_input("Search Engine API Key", type="password")
+                                if st.button("", icon=":material/send:", key="add_gg_key_system"):
+                                    gg_apikey_data = {
+                                        "user_id": st.session_state["user_id"],
+                                        "search_id": search_id,
+                                        "search_key": search_key
+                                    }
+                                    response = requests.post(url=os.getenv("SAVE_WEBSEARCH_GOOGLE_API"),
+                                                             json=gg_apikey_data)
+                                    st.session_state.google_search = True
+                                    st.session_state["google_api_key"] = True
+                                    st.success("Saved")
+
+                            add_google_key()
+                        if st.session_state.google_search:
+                            st.session_state["search_tool"] = "google_search"
+                            st.session_state.serper_search = False
+
+                    def on_serper_search_change():
+                        if not st.session_state["serper_api_key"]:
+                            @st.dialog("Add your Serper search API key")
+                            def add_serper_key():
+                                key = st.text_input("Search API Key", type="password")
+                                if st.button("", icon=":material/send:", key="add_serper_key_sytem"):
+                                    gg_apikey_data = {
+                                        "user_id": st.session_state["user_id"],
+                                        "key": key
+                                    }
+                                    response = requests.post(url=os.getenv("SAVE_WEBSEARCH_SERPER_API"),
+                                                             json=gg_apikey_data)
+                                    st.session_state.serper_search = True
+                                    st.session_state["serper_api_key"] = True
+                                    st.success("Saved")
+
+                            add_serper_key()
+                        if st.session_state.serper_search:
+                            st.session_state["search_tool"] = "serper_search"
+                            st.session_state.google_search = False
+
+                    st.toggle("🔍Google Web Search", key='google_search', on_change=on_google_search_change)
+
+                    st.toggle("🔍Serper Web Search", key="serper_search", on_change=on_serper_search_change)
+
+                    if not st.session_state.google_search and not st.session_state.serper_search:
+                        st.session_state["search_tool"] = ""
+
+            css_plugin_col = float_css_helper(top="27px", z_index="100")
+            css_model_selection_col = float_css_helper(top="0px", z_index="100")
+            plugin_col.float(css_plugin_col)
+            model_selection_col.float(css_model_selection_col)
             with bottom():
                 empty_col_1, input_col, empty_col = st.columns([1.25, 8, 1.25], vertical_alignment="top")
                 with input_col:
@@ -573,14 +643,15 @@ if st.session_state["authenticated"]:
                     with st.chat_message("assistant"):
                         assistant_message = st.empty()
 
-                        prompt = st.session_state["prompt_template"] if st.session_state["selected_conversation_id"][1] else ""
+                        prompt = st.session_state["prompt_template"] if st.session_state["selected_conversation_id"][1] else NORMAL_QA_PROMPT
 
                         response_stream = handler_input_system(
                                        st.session_state["question"], st.session_state["selected_conversation_id"][0],
                                        st.session_state["user_id"], SYSTEM_URL,
                                        st.session_state.model, st.session_state["admin_department"],
                                        st.session_state["selected_conversation_id"][1] or "", prompt,
-                                       st.session_state["selected_conversation_id"][3] or ""
+                                       st.session_state["selected_conversation_id"][3] or "",
+                                       st.session_state["search_tool"]
                             )
                         # Stream and display the assistant's response
                         output = ""
@@ -673,11 +744,12 @@ if st.session_state["authenticated"]:
                     with st.chat_message("assistant"):
                         assistant_message = st.empty()
 
-                        prompt = " "
+                        prompt = NORMAL_QA_PROMPT
                         response_stream = handler_input_system(
                             st.session_state["question"], st.session_state["selected_conversation_id"][0],
                             st.session_state["user_id"], SYSTEM_URL,
-                            st.session_state.model, st.session_state["admin_department"], "", prompt, ""
+                            st.session_state.model, st.session_state["admin_department"], "", prompt, "",
+                            st.session_state["search_tool"]
                         )
                         # Stream and display the assistant's response
                         output = ""
@@ -714,7 +786,7 @@ if st.session_state["authenticated"]:
         def Chat_With_Files():
             # Định nghĩa prompt template
             if "prompt_template_user" not in st.session_state:
-                st.session_state["prompt_template_user"] = " "
+                st.session_state["prompt_template_user"] = NORMAL_QA_PROMPT
             if "title_prompt_template_user" not in st.session_state:
                 st.session_state["title_prompt_template_user"] = "Normal QA"
 
@@ -983,23 +1055,81 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
                             st.rerun()
 
             st.session_state.model = 'gpt-4o-mini'
-            st.session_state.model = 'gpt-4o-mini'
-            model_select, non_model_select = st.columns([1.5, 8], vertical_alignment="top")
-            with model_select:
+            model_selection_col, plugin_col, col3 = st.columns([1.5, 1.5, 6.5], vertical_alignment="top")
+            with model_selection_col:
                 model_selection = st.container()
                 with model_selection:
                     option = st.selectbox(
                         label="",
-                        options=("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"
-                                 , "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro", "gemini-1.5-flash-002"
-                                 , "gemini-1.5-pro-002", "gemini-1.5-flash-8b"),
+                        options=("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo",
+                                 "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro", "gemini-1.5-flash-002",
+                                 "gemini-1.5-pro-002", "gemini-1.5-flash-8b"),
                         index=None,
                         placeholder="gpt-4o-mini",
                     )
                     if option:
                         st.session_state.model = option
-            css_model_select = float_css_helper(top="0px", z_index="100")
-            model_select.float(css_model_select)
+            with plugin_col:
+                if "search_tool" not in st.session_state:
+                    st.session_state["search_tool"] = None
+                if "google_search" not in st.session_state:
+                    st.session_state.google_search = False
+                if "serper_search" not in st.session_state:
+                    st.session_state.serper_search = False
+                with st.popover("Plugin", icon=":material/extension:"):
+                    def on_google_search_change():
+                        if not st.session_state["google_api_key"]:
+                            @st.dialog("Add your Google search API key")
+                            def add_google_key():
+                                search_id = st.text_input("Search Engine ID")
+                                search_key = st.text_input("Search Engine API Key", type="password")
+                                if st.button("", icon=":material/send:", key="add_gg_key_user"):
+                                    gg_apikey_data = {
+                                        "user_id": st.session_state["user_id"],
+                                        "search_id": search_id,
+                                        "search_key": search_key
+                                    }
+                                    response = requests.post(url=os.getenv("SAVE_WEBSEARCH_GOOGLE_API"),
+                                                             json=gg_apikey_data)
+                                    st.session_state.google_search = True
+                                    st.session_state["google_api_key"] = True
+                                    st.success("Saved")
+                            add_google_key()
+                        if st.session_state.google_search:
+                            st.session_state["search_tool"] = "google_search"
+                            st.session_state.serper_search = False
+
+                    def on_serper_search_change():
+                        if not st.session_state["serper_api_key"]:
+                            @st.dialog("Add your Serper search API key")
+                            def add_serper_key():
+                                key = st.text_input("Search API Key", type="password")
+                                if st.button("", icon=":material/send:", key="add_serper_key_user"):
+                                    gg_apikey_data = {
+                                        "user_id": st.session_state["user_id"],
+                                        "key": key
+                                    }
+                                    response = requests.post(url=os.getenv("SAVE_WEBSEARCH_SERPER_API"),
+                                                             json=gg_apikey_data)
+                                    st.session_state.serper_search = True
+                                    st.session_state["serper_api_key"] = True
+                                    st.success("Saved")
+                            add_serper_key()
+                        if st.session_state.serper_search:
+                            st.session_state["search_tool"] = "serper_search"
+                            st.session_state.google_search = False
+
+                    st.toggle("🔍Google Web Search", key='google_search', on_change=on_google_search_change)
+
+                    st.toggle("🔍Serper Web Search", key="serper_search", on_change=on_serper_search_change)
+
+                    if not st.session_state.google_search and not st.session_state.serper_search:
+                        st.session_state["search_tool"] = ""
+
+            css_plugin_col = float_css_helper(top="27px", z_index="100")
+            css_model_selection_col = float_css_helper(top="0px", z_index="100")
+            plugin_col.float(css_plugin_col)
+            model_selection_col.float(css_model_selection_col)
             col1, col2 = st.columns([8, 1.5], vertical_alignment="top")
             with col2:
                 st.write("---")
@@ -1008,7 +1138,7 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
                 with col_1:
                     if st.session_state["title_prompt_template_user"] == "Normal QA":
                         with st.popover("Normal QA", use_container_width=True):
-                            st.markdown(f" ")
+                            st.markdown(NORMAL_QA_PROMPT)
                     elif st.session_state["title_prompt_template_user"] == "Chat with document":
                         with st.popover("Chat with document", use_container_width=True):
                             st.markdown(f"{PROMPT_TEMPLATE}")
@@ -1018,7 +1148,7 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
                             st.session_state["prompt_template_user"] = PROMPT_TEMPLATE
                             st.session_state["title_prompt_template_user"] = "Chat with document"
                         elif st.session_state["title_prompt_template_user"] == "Chat with document":
-                            st.session_state["prompt_template_user"] = " "
+                            st.session_state["prompt_template_user"] = NORMAL_QA_PROMPT
                             st.session_state["title_prompt_template_user"] = "Normal QA"
                         st.rerun()
             css_col2 = float_css_helper(top="70px")
@@ -1073,7 +1203,7 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
                                 st.session_state["question"], st.session_state["selected_conversation_id"][0],
                                 st.session_state["user_id"], USER_URL, st.session_state.model, prompt_template,
                                 st.session_state["admin_department"], st.session_state["selected_conversation_id"][1] or "",
-                                st.session_state["selected_conversation_id"][3] or "")
+                                st.session_state["selected_conversation_id"][3] or "", st.session_state["search_tool"])
 
                             # Stream and display the assistant's response
                             output = ""
@@ -1120,11 +1250,11 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
                         with st.chat_message("assistant"):
                             assistant_message = st.empty()
 
-                            prompt = ""
+                            prompt = NORMAL_QA_PROMPT
                             response_stream = handler_input_user(
                                 st.session_state["question"], st.session_state["selected_conversation_id"][0],
                                 st.session_state["user_id"], USER_URL, st.session_state.model, prompt,
-                                st.session_state["admin_department"], "", ""
+                                st.session_state["admin_department"], "", "", st.session_state["search_tool"]
                             )
                             # Stream and display the assistant's response
                             output = ""

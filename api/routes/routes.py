@@ -28,6 +28,34 @@ def get_retriever(user_folder: RetrievalUser):
         return {"None"}
 
 
+@router.post("/save_websearch_google_api/")
+async def save_websearch_google_api(key: WebsearchGoogleKey):
+    google_api_key[key.user_id] = [key.search_id, key.search_key]
+
+
+@router.post("/save_websearch_serper_api/")
+async def save_websearch_serper_api(key: WebsearchSerperKey):
+    serper_api_key[key.user_id] = key.key
+
+
+@router.get("/check_websearch_google_api/")
+async def check_websearch_google_api(user_id: UserID):
+    try:
+        if google_api_key[user_id.user_id]:
+            return 1
+    except:
+        return 0
+
+
+@router.get("/check_websearch_serper_api/")
+async def check_websearch_serper_api(user_id: UserID):
+    try:
+        if serper_api_key[user_id.user_id]:
+            return 1
+    except:
+        return 0
+
+
 @router.delete("/delete_folder_user/")
 def delete_folder_user(folder: FolderUser):
     user_id = folder.user_id
@@ -77,8 +105,13 @@ async def get_answer_about_users_data(question_request: QuestionRequest):
     except:
         user_retriever = None
         user_bm25_retriever = None
-
-    prompt = await bot.question_handler(user_retriever, user_bm25_retriever, question_request)
+    if len(question_request.search_tool) > 0:
+        websearchkey = WebSearchKey(google_search_id=google_api_key[question_request.user_id][0] if google_api_key else "",
+                                    google_search_key=google_api_key[question_request.user_id][1] if google_api_key else "",
+                                    serper_key=serper_api_key[question_request.user_id] if serper_api_key else "")
+    else:
+        websearchkey = WebSearchKey(google_search_id="", google_search_key="", serper_key="")
+    prompt = await bot.question_handler(user_retriever, user_bm25_retriever, question_request, websearchkey)
     if question_request.model in model_openai:
         generator = bot.send_message_openai(prompt, question_request.model)
     else:
@@ -104,8 +137,13 @@ async def get_response(question_request: QuestionRequest) -> StreamingResponse:
     except:
         system_retriever = None
         system_bm25_retriever = None
-
-    prompt = await bot.question_handler_system(system_retriever, system_bm25_retriever, question_request)
+    if len(question_request.search_tool) > 0:
+        websearchkey = WebSearchKey(google_search_id=google_api_key[question_request.user_id][0] if google_api_key else "",
+                                    google_search_key=google_api_key[question_request.user_id][1] if google_api_key else "",
+                                    serper_key=serper_api_key[question_request.user_id] if serper_api_key else "")
+    else:
+        websearchkey = WebSearchKey(google_search_id="", google_search_key="", serper_key="")
+    prompt = await bot.question_handler_system(system_retriever, system_bm25_retriever, question_request, websearchkey)
     generator = bot.send_message_openai(prompt, question_request.model) if question_request.model in model_openai \
         else bot.send_message_gemini(prompt, question_request.model)
 
@@ -256,7 +294,6 @@ def get_apikey_admin(admin_department: AdminID):
     # Lưu key vào cache
     openai_embedding_apikey_cache[f'{admin_department.admin_department}'] = openai_embedding_key
     apikeys_cache[f'{admin_department.admin_department}'] = dict(apikey)
-    #return len(apikeys_cache[f'{admin_department.admin_department}'])
 
 
 @router.post('/upload_data_admin/')

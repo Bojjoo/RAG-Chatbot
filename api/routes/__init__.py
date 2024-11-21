@@ -9,10 +9,14 @@ import pandas as pd
 import os
 import shutil
 
-
+# LLM API keys
 openai_embedding_apikey_cache = {}
 apikeys_cache = {}
 router = APIRouter()
+
+# Web search api key
+google_api_key = {}
+serper_api_key = {}
 
 # for users's files
 retriever_cache = {}
@@ -45,6 +49,7 @@ class QuestionRequest(BaseModel):
     admin_department: str
     folder_id: str
     prompt_folder: str
+    search_tool: str
 
 
 class UserID(BaseModel):
@@ -137,3 +142,20 @@ class FolderUser(BaseModel):
 class APIKey(BaseModel):
     apikey: str
     type: str
+
+
+class WebsearchSerperKey(BaseModel):
+    user_id: str
+    key: str
+
+
+class WebsearchGoogleKey(BaseModel):
+    user_id: str
+    search_id: str
+    search_key: str
+
+
+class WebSearchKey(BaseModel):
+    google_search_id: str
+    google_search_key: str
+    serper_key: str

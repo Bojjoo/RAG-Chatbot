@@ -6,7 +6,8 @@ class ChatBot:
         self.model_llm = None
         self.openai_apikey = openai_apikey
         self.gemini_apikey = gemini_apikey
-        self.model_reformulate_question = ChatOpenAI(temperature=TEMPERATURE, model=MODEL_LLM, api_key=openai_embedding_key)
+        self.model_reformulate_question = ChatOpenAI(temperature=TEMPERATURE, model=MODEL_LLM,
+                                                     api_key=openai_embedding_key)
         self.sender = ['human', 'ai']
 
     # Reformulate the question based on history
@@ -31,70 +32,106 @@ class ChatBot:
         content_text = "\n\n---\n\n".join([doc.page_content for doc in compressed_docs[:6]])
         return content_text
 
-    def prompt_rag(self, question, context, history, prompt_template, prompt_folder):
+    def prompt_rag(self, question, context, web_search_context, history, prompt_template, prompt_folder):
         llm_prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", "Instruction 1:\n {prompt_folder}\n"),
                 ("system", "Instruction 2:\n {prompt_template}\n"),
                 ("system", "Chat history: \n {chat_history}\n"),
-                ("system", "Context about relevant data: \n"),
-                ("system", "{context}\n"),
+                ("system", "Context about relevant data: \n{context}\n"),
+                ("system", "Context received from google search:\n{web_search_context}\n"),
                 ("system", "Answer the question: {question}"),
             ]
         )
         prompt = llm_prompt.format(prompt_folder=prompt_folder, prompt_template=prompt_template,
-                                   chat_history=history, context=context, question=question)
+                                   chat_history=history, context=context, web_search_context=web_search_context,
+                                   question=question)
         return prompt
 
-    def prompt_normalqa(self, question, history, prompt_template, prompt_folder):
+    def prompt_normalqa(self, question, history, web_search_context, prompt_template, prompt_folder):
         llm_prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", "Instruction 1:\n {prompt_folder}\n"),
                 ("system", "Instruction 2:\n {prompt_template}\n"),
                 ("system", "Chat history: \n {chat_history}\n"),
+                ("system", "Context received from google search:\n{web_search_context}\n"),
                 ("system", "Answer the question: {question}"),
             ]
         )
         prompt = llm_prompt.format(prompt_folder=prompt_folder, prompt_template=prompt_template,
-                                   chat_history=history, question=question)
+                                   chat_history=history, web_search_context=web_search_context, question=question)
         return prompt
 
     # Handle all above elements --> prompt for llm
-    async def question_handler(self, retriever, bm25_retriever, question_request: QuestionRequest):
+    async def question_handler(self, retriever, bm25_retriever, question_request: QuestionRequest,
+                               websearchkey: WebSearchKey):
         # Get history and generate new question
         history = sql_conn.get_chat_history(question_request.conversation_id)[-8::]
+
+        # Nếu web_search là True thì thêm tìm kiếm google search, còn không thì thôi
+        if question_request.search_tool == "google_search":
+            search = GoogleSearchAPIWrapper(google_api_key=websearchkey.google_search_key, google_cse_id=websearchkey.google_search_id)
+            google_search_tool = Tool(
+                name="get_web_search_results",
+                description="Search for information from the internet in real-time using Google Search.",
+                func=search.run,
+            )
+            web_search_context = await google_search_tool.arun(question_request.question)
+        elif question_request.search_tool == "serper_search":
+            search = GoogleSerperAPIWrapper(gl="vn", serper_api_key=websearchkey.serper_key)
+            web_search_context = await search.arun(question_request.question)
+        else:
+            web_search_context = ""
+
         # Nếu prompt template là system rag thì sử dụng retriever để retrieve data, còn không thì thôi
         if retriever:
             if question_request.prompt_template.startswith("__Rag__"):
                 new_question = await self.reformulate_question(question_request.question, history)
                 context = await self.retriever(new_question, retriever, bm25_retriever)
-                prompt = self.prompt_rag(new_question, context, history,
+                prompt = self.prompt_rag(new_question, context, web_search_context, history,
                                          question_request.prompt_template, question_request.prompt_folder)
             else:
-                prompt = self.prompt_normalqa(question_request.question, history,
+                prompt = self.prompt_normalqa(question_request.question, history, web_search_context,
                                               question_request.prompt_template, question_request.prompt_folder)
             return prompt
         else:
-            prompt = self.prompt_normalqa(question_request.question, history,
+            prompt = self.prompt_normalqa(question_request.question, history, web_search_context,
                                           question_request.prompt_template, question_request.prompt_folder)
             return prompt
 
-    async def question_handler_system(self, retriever, bm25_retriever, question_request: QuestionRequest):
+    async def question_handler_system(self, retriever, bm25_retriever, question_request: QuestionRequest,
+                                      websearchkey: WebSearchKey):
         # Get history and generate new question
         history = sql_conn.get_chat_history_system(question_request.conversation_id)[-8::]
+        # Nếu web_search là True thì thêm tìm kiếm google search, còn không thì thôi
+        if question_request.search_tool == "google_search":
+            search = GoogleSearchAPIWrapper(google_api_key=websearchkey.google_search_key,
+                                            google_cse_id=websearchkey.google_search_id)
+            google_search_tool = Tool(
+                name="get_web_search_results",
+                description="Search for information from the internet in real-time using Google Search.",
+                func=search.run,
+            )
+            web_search_context = await google_search_tool.arun(question_request.question)
+        elif question_request.search_tool == "serper_search":
+            search = GoogleSerperAPIWrapper(gl="vn", serper_api_key=websearchkey.serper_key)
+            web_search_context = await search.arun(question_request.question)
+        else:
+            web_search_context = ""
+
         # Nếu prompt template là system rag thì sử dụng retriever để retrieve data, còn không thì thôi
         if retriever:
             if question_request.prompt_template.startswith("__Rag__"):
                 new_question = await self.reformulate_question(question_request.question, history)
                 context = await self.retriever(new_question, retriever, bm25_retriever)
-                prompt = self.prompt_rag(new_question, context, history,
+                prompt = self.prompt_rag(new_question, context, web_search_context, history,
                                          question_request.prompt_template, question_request.prompt_folder)
             else:
-                prompt = self.prompt_normalqa(question_request.question, history,
+                prompt = self.prompt_normalqa(question_request.question, history, web_search_context,
                                               question_request.prompt_template, question_request.prompt_folder)
             return prompt
         else:
-            prompt = self.prompt_normalqa(question_request.question, history,
+            prompt = self.prompt_normalqa(question_request.question, history, web_search_context,
                                           question_request.prompt_template, question_request.prompt_folder)
             return prompt
 

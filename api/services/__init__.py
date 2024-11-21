@@ -11,6 +11,10 @@ from langchain.retrievers import ContextualCompressionRetriever
 from pydantic import BaseModel
 from dotenv import load_dotenv, find_dotenv
 from langchain.callbacks import AsyncIteratorCallbackHandler
+from langchain_google_community import GoogleSearchAPIWrapper
+from langchain_core.tools import Tool
+from langchain_community.utilities import GoogleSerperAPIWrapper
+
 
 import asyncio
 from typing import AsyncIterable
@@ -48,6 +52,7 @@ sql_conn = SQLDatabase()
 # Counting token
 tokenizer = tiktoken.get_encoding("cl100k_base")
 
+
 class QuestionRequest(BaseModel):
     question: str
     conversation_id: str
@@ -57,4 +62,12 @@ class QuestionRequest(BaseModel):
     admin_department: str
     folder_id: str
     prompt_folder: str
+    search_tool: str
+
+
+class WebSearchKey(BaseModel):
+    google_search_id: str
+    google_search_key: str
+    serper_key: str
+
 

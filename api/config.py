@@ -18,6 +18,9 @@ RESTRICTIONS:
 Do NOT say "Based on the given information". Do not make up answers if you are not sure about the answer.
 """
 
+NORMAL_QA_PROMPT = """I want you to act as a funny and friendly AI chatbot that answers questions, you will use emojis.
+You will be as detailed as possible. You can use the provided context to give an informative and accurate answer."""
+
 REGENERATE_QUESTION_PROMPT = """DO NOT answer the input. 
 Please reformulate the user's input based on the conversation history, maintaining the original question format and context. 
 Do not add new information or fabricate the subject. 
