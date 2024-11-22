@@ -22,16 +22,16 @@ NORMAL_QA_PROMPT = """I want you to act as a funny and friendly AI chatbot that 
 You will be as detailed as possible. You can use the provided context to give an informative and accurate answer."""
 
 REGENERATE_QUESTION_PROMPT = """DO NOT answer the input. 
-Please reformulate the user's input based on the conversation history, maintaining the original question format and context. 
-Do not add new information or fabricate the subject. 
+Please reformulate the user's input based on the conversation history, starting from the most recent messages and moving backward.
+Maintaining the original question format and context. Do not add new information or fabricate the subject.
 If the input question references a prior entity (e.g., 'he','it','she','they'), replace it with the full entity name from the history.
 Keep the final output concise and clearly tied to the previous conversation.
-Make sure to identify clearly what is social greeting input to keep the input remain the same , what is not to reformulate the input.\n
+Make sure to identify clearly what is social greeting input to keep the input remain the same , what is not to reformulate the input.
+Analyze from latest history to further.
 """
-#Identify any reference to previously mentioned subjects and replace it with the specific context.
 
-RENAME_CONVERSATION_PROMPT = """give me a name about this conversation based on the first chat history. 
-The length of the name should not be longer than 20 characters.\n"""
+RENAME_CONVERSATION_PROMPT = """Give me a name about this conversation based on the chat history. 
+The length of the name should not be longer than 20 characters and DO NOT use apostrophe!\n"""
 
 # Retriever
 SEARCH_KWARGS = {'k': 25, 'score_threshold': 0.01, 'sorted': True}

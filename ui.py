@@ -534,6 +534,8 @@ if st.session_state["authenticated"]:
                 with st.popover("Plugin", icon=":material/extension:"):
                     def on_google_search_change():
                         if not st.session_state["google_api_key"]:
+                            st.session_state.google_search = False
+
                             @st.dialog("Add your Google search API key")
                             def add_google_key():
                                 search_id = st.text_input("Search Engine ID")
@@ -548,7 +550,11 @@ if st.session_state["authenticated"]:
                                                              json=gg_apikey_data)
                                     st.session_state.google_search = True
                                     st.session_state["google_api_key"] = True
+                                    st.session_state["search_tool"] = "google_search"
+                                    st.session_state.serper_search = False
                                     st.success("Saved")
+                                else:
+                                    st.session_state["google_api_key"] = False
 
                             add_google_key()
                         if st.session_state.google_search:
@@ -557,6 +563,8 @@ if st.session_state["authenticated"]:
 
                     def on_serper_search_change():
                         if not st.session_state["serper_api_key"]:
+                            st.session_state.serper_search = False
+
                             @st.dialog("Add your Serper search API key")
                             def add_serper_key():
                                 key = st.text_input("Search API Key", type="password")
@@ -569,19 +577,26 @@ if st.session_state["authenticated"]:
                                                              json=gg_apikey_data)
                                     st.session_state.serper_search = True
                                     st.session_state["serper_api_key"] = True
+                                    st.session_state["search_tool"] = "serper_search"
+                                    st.session_state.google_search = False
                                     st.success("Saved")
+                                else:
+                                    st.session_state["serper_api_key"] = False
 
                             add_serper_key()
                         if st.session_state.serper_search:
                             st.session_state["search_tool"] = "serper_search"
                             st.session_state.google_search = False
 
-                    st.toggle("🔍Google Web Search", key='google_search', on_change=on_google_search_change)
+                    st.toggle(label="🔍Google Web Search", key='google_search', on_change=on_google_search_change,
+                              value=st.session_state.google_search)
 
-                    st.toggle("🔍Serper Web Search", key="serper_search", on_change=on_serper_search_change)
+                    st.toggle(label="🔍Serper Web Search", key="serper_search", on_change=on_serper_search_change,
+                              value=st.session_state.serper_search)
 
                     if not st.session_state.google_search and not st.session_state.serper_search:
                         st.session_state["search_tool"] = ""
+                    st.markdown(st.session_state["search_tool"])
 
             css_plugin_col = float_css_helper(top="27px", z_index="100")
             css_model_selection_col = float_css_helper(top="0px", z_index="100")
@@ -595,7 +610,6 @@ if st.session_state["authenticated"]:
                         st.session_state["question"] = st.chat_input("What do you want to know?")
                     css_chat_input_container = float_css_helper(bottom="27px", z_index="100")
                     chat_input_container.float(css_chat_input_container)
-
             # Chat session
             if "selected_conversation_id" in st.session_state and st.session_state["selected_conversation_id"][0] not in st.session_state["conversations_system"]:
                 del st.session_state["selected_conversation_id"]
@@ -629,6 +643,11 @@ if st.session_state["authenticated"]:
                     except:
                         pass
 
+            # Check web search key
+            if st.session_state["question"] and st.session_state["search_tool"] == "google_search" and not st.session_state["google_api_key"]:
+                st.error("Please add your Google search API key")
+            elif st.session_state["question"] and st.session_state["search_tool"] == "serper_search" and not st.session_state["serper_api_key"]:
+                st.error("Please add your Serper search API key")
             # Hiển thị các tin nhắn trong phiên hội thoại đã chọn
             if "messages" in st.session_state:
                 for message in st.session_state.messages:
@@ -678,11 +697,11 @@ if st.session_state["authenticated"]:
                                 "admin_department": st.session_state["admin_department"]
                             }
                             new_name = requests.post(rename_conversation_endpoint, json=data_for_rename)
-                            try:
-                                sql_conn.change_conversation_name_system(st.session_state["selected_conversation_id"][0],
+                            # try:
+                            sql_conn.change_conversation_name_system(st.session_state["selected_conversation_id"][0],
                                                                          new_name.json().strip('"'))
-                            except:
-                                pass
+                            # except:
+                            #     pass
                             st.rerun()
 
             else:
@@ -1119,12 +1138,13 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
                             st.session_state["search_tool"] = "serper_search"
                             st.session_state.google_search = False
 
-                    st.toggle("🔍Google Web Search", key='google_search', on_change=on_google_search_change)
+                    st.toggle(label="🔍Google Web Search", key='google_search', on_change=on_google_search_change)
 
-                    st.toggle("🔍Serper Web Search", key="serper_search", on_change=on_serper_search_change)
+                    st.toggle(label="🔍Serper Web Search", key="serper_search", on_change=on_serper_search_change)
 
                     if not st.session_state.google_search and not st.session_state.serper_search:
                         st.session_state["search_tool"] = ""
+                    st.markdown(st.session_state["search_tool"])
 
             css_plugin_col = float_css_helper(top="27px", z_index="100")
             css_model_selection_col = float_css_helper(top="0px", z_index="100")
@@ -1510,6 +1530,7 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
                             else:
                                 st.session_state["save_apikey"] = False
                                 st.warning("API must not be empty!")
+                            del st.session_state[f"{name}"]
             
             st.markdown("OpenAI Embedding APIKEY (Used for embedding documents and reformulating question)")
             col1, col2 = st.columns([6, 3])
@@ -1552,6 +1573,7 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
                                 st.warning("Incorrect API key provided, please make sure your API key is correct!")
                         else:
                             st.warning("API must not be empty!")
+                        del st.session_state["openai_embedding_key"]
 
         def Project_Folder():
             st.subheader("Create your project folder here")

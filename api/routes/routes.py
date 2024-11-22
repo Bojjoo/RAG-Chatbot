@@ -106,9 +106,9 @@ async def get_answer_about_users_data(question_request: QuestionRequest):
         user_retriever = None
         user_bm25_retriever = None
     if len(question_request.search_tool) > 0:
-        websearchkey = WebSearchKey(google_search_id=google_api_key[question_request.user_id][0] if google_api_key else "",
-                                    google_search_key=google_api_key[question_request.user_id][1] if google_api_key else "",
-                                    serper_key=serper_api_key[question_request.user_id] if serper_api_key else "")
+        websearchkey = WebSearchKey(google_search_id=google_api_key.get(question_request.user_id, ["", ""])[0],
+                                    google_search_key=google_api_key.get(question_request.user_id, ["", ""])[1],
+                                    serper_key=serper_api_key.get(question_request.user_id, ""))
     else:
         websearchkey = WebSearchKey(google_search_id="", google_search_key="", serper_key="")
     prompt = await bot.question_handler(user_retriever, user_bm25_retriever, question_request, websearchkey)
@@ -138,9 +138,10 @@ async def get_response(question_request: QuestionRequest) -> StreamingResponse:
         system_retriever = None
         system_bm25_retriever = None
     if len(question_request.search_tool) > 0:
-        websearchkey = WebSearchKey(google_search_id=google_api_key[question_request.user_id][0] if google_api_key else "",
-                                    google_search_key=google_api_key[question_request.user_id][1] if google_api_key else "",
-                                    serper_key=serper_api_key[question_request.user_id] if serper_api_key else "")
+        websearchkey = WebSearchKey(google_search_id=google_api_key.get(question_request.user_id, ["", ""])[0],
+                                    google_search_key=google_api_key.get(question_request.user_id, ["", ""])[1],
+                                    serper_key=serper_api_key.get(question_request.user_id, ""))
+
     else:
         websearchkey = WebSearchKey(google_search_id="", google_search_key="", serper_key="")
     prompt = await bot.question_handler_system(system_retriever, system_bm25_retriever, question_request, websearchkey)
