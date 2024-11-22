@@ -538,6 +538,7 @@ if st.session_state["authenticated"]:
 
                             @st.dialog("Add your Google search API key")
                             def add_google_key():
+                                st.markdown("To get your Google Search API Key and Search Engine ID, [follow the instructions here](https://docs.typingmind.com/plugins/use-web-search-and-image-search)")
                                 search_id = st.text_input("Search Engine ID")
                                 search_key = st.text_input("Search Engine API Key", type="password")
                                 if st.button("", icon=":material/send:", key="add_gg_key_system"):
@@ -567,6 +568,7 @@ if st.session_state["authenticated"]:
 
                             @st.dialog("Add your Serper search API key")
                             def add_serper_key():
+                                st.markdown("You will receive 2500 free requests from Serper, [register account here](https://serper.dev/)")
                                 key = st.text_input("Search API Key", type="password")
                                 if st.button("", icon=":material/send:", key="add_serper_key_sytem"):
                                     gg_apikey_data = {
@@ -1092,8 +1094,10 @@ However, it could increase the token usage and take longer time.""", icon="â„¹ï¸
                 with st.popover("Plugin", icon=":material/extension:"):
                     def on_google_search_change():
                         if not st.session_state["google_api_key"]:
+                            st.session_state.google_search = False
                             @st.dialog("Add your Google search API key")
                             def add_google_key():
+                                st.markdown("To get your Google Search API Key and Search Engine ID, [follow the instructions here](https://docs.typingmind.com/plugins/use-web-search-and-image-search)")
                                 search_id = st.text_input("Search Engine ID")
                                 search_key = st.text_input("Search Engine API Key", type="password")
                                 if st.button("", icon=":material/send:", key="add_gg_key_user"):
@@ -1106,6 +1110,8 @@ However, it could increase the token usage and take longer time.""", icon="â„¹ï¸
                                                              json=gg_apikey_data)
                                     st.session_state.google_search = True
                                     st.session_state["google_api_key"] = True
+                                    st.session_state["search_tool"] = "google_search"
+                                    st.session_state.serper_search = False
                                     st.success("Saved")
                             add_google_key()
                         if st.session_state.google_search:
@@ -1114,8 +1120,10 @@ However, it could increase the token usage and take longer time.""", icon="â„¹ï¸
 
                     def on_serper_search_change():
                         if not st.session_state["serper_api_key"]:
+                            st.session_state.serper_search = False
                             @st.dialog("Add your Serper search API key")
                             def add_serper_key():
+                                st.markdown("You will receive 2500 free requests from Serper, [register account here](https://serper.dev/)")
                                 key = st.text_input("Search API Key", type="password")
                                 if st.button("", icon=":material/send:", key="add_serper_key_user"):
                                     gg_apikey_data = {
@@ -1126,6 +1134,8 @@ However, it could increase the token usage and take longer time.""", icon="â„¹ï¸
                                                              json=gg_apikey_data)
                                     st.session_state.serper_search = True
                                     st.session_state["serper_api_key"] = True
+                                    st.session_state["search_tool"] = "serper_search"
+                                    st.session_state.google_search = False
                                     st.success("Saved")
                             add_serper_key()
                         if st.session_state.serper_search:
