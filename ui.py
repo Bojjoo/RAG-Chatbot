@@ -697,11 +697,8 @@ if st.session_state["authenticated"]:
                                 "admin_department": st.session_state["admin_department"]
                             }
                             new_name = requests.post(rename_conversation_endpoint, json=data_for_rename)
-                            # try:
                             sql_conn.change_conversation_name_system(st.session_state["selected_conversation_id"][0],
-                                                                         new_name.json().strip('"'))
-                            # except:
-                            #     pass
+                                                                     new_name.json().strip('"'))
                             st.rerun()
 
             else:
@@ -794,11 +791,8 @@ if st.session_state["authenticated"]:
                             "admin_department": st.session_state["admin_department"]
                         }
                         new_name = requests.post(rename_conversation_endpoint, json=data_for_rename)
-                        try:
-                            sql_conn.change_conversation_name_system(st.session_state["selected_conversation_id"][0],
-                                                                     new_name.json().strip('"'))
-                        except:
-                            pass
+                        sql_conn.change_conversation_name_system(st.session_state["selected_conversation_id"][0],
+                                                                 new_name.json().strip('"'))
                         st.rerun()
 
         # Chat with user's files
@@ -1248,11 +1242,8 @@ However, it could increase the token usage and take longer time.""", icon="â„¹ï¸
                                     "admin_department": st.session_state["admin_department"]
                                 }
                                 new_name = requests.post(rename_conversation_endpoint, json=data_for_rename)
-                                try:
-                                    sql_conn.change_conversation_name(st.session_state["selected_conversation_id"][0],
-                                                                      new_name.json().strip('"'))
-                                except:
-                                    pass
+                                sql_conn.change_conversation_name(st.session_state["selected_conversation_id"][0],
+                                                                  new_name.json().strip('"'))
                                 st.rerun()
 
                 else:
@@ -1299,11 +1290,8 @@ However, it could increase the token usage and take longer time.""", icon="â„¹ï¸
                                 "admin_department": st.session_state["admin_department"]
                             }
                             new_name = requests.post(rename_conversation_endpoint, json=data_for_rename)
-                            try:
-                                sql_conn.change_conversation_name(st.session_state["selected_conversation_id"][0],
-                                                                  new_name.json().strip('"'))
-                            except:
-                                pass
+                            sql_conn.change_conversation_name(st.session_state["selected_conversation_id"][0],
+                                                              new_name.json().strip('"'))
                             st.rerun()
 
         def Chat_With_CSVFile():
@@ -1459,10 +1447,8 @@ However, it could increase the token usage and take longer time.""", icon="â„¹ï¸
                                 "admin_department": st.session_state["admin_department"]
                             }
                             new_name = requests.post(rename_conversation_endpoint, json=data_for_rename)
-                            try:
-                                sql_conn.change_conversation_name(st.session_state["selected_conversation_id"], new_name.json().strip('"'))
-                            except:
-                                pass
+                            sql_conn.change_conversation_name(st.session_state["selected_conversation_id"],
+                                                              new_name.json().strip('"'))
                             st.rerun()
                 else:
                     st.warning("Please select a conversation first!")
