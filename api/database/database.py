@@ -99,10 +99,12 @@ VALUES ('{conversation_id}', '{conversation_name}', (select folder_id from folde
 
     # Đổi tên conversation
     def change_conversation_name(self, conversation_id, new_name):
-        self.cur.execute(f"update conversations_user set conversation_name ='{new_name}' where conversation_id='{conversation_id}';")
+        query = "update conversations_user set conversation_name = %s where conversation_id = %s;"
+        self.cur.execute(query, (new_name, conversation_id))
 
     def change_conversation_name_system(self, conversation_id, new_name):
-        self.cur.execute(f"update conversations_system set conversation_name ='{new_name}' where conversation_id='{conversation_id}';")
+        query = "update conversations_system set conversation_name = %s where conversation_id = %s;"
+        self.cur.execute(query, (new_name, conversation_id))
 
     # Lấy ra history chat từ mỗi conversation_id: 8 lịch sử chat = 4 cuộc hội thoại
     def get_chat_history(self, conversation_id):

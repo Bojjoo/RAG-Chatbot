@@ -1,6 +1,7 @@
 from api.config import *
 
 # For chatbot
+import ast
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import OpenAIEmbeddings
@@ -14,6 +15,7 @@ from langchain.callbacks import AsyncIteratorCallbackHandler
 from langchain_google_community import GoogleSearchAPIWrapper
 from langchain_core.tools import Tool
 from langchain_community.utilities import GoogleSerperAPIWrapper
+from langchain_google_community.search import GoogleSearchResults
 
 
 import asyncio

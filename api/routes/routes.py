@@ -88,7 +88,6 @@ async def add_prompt_template(prompt_template: PromptTemplate):
 
 @router.post('/get_answer_about_users_data/')
 async def get_answer_about_users_data(question_request: QuestionRequest):
-    # try:
     if question_request.model in model_openai:
         bot = ChatBot(
             openai_apikey=apikeys_cache[question_request.admin_department]["openaikey"],
@@ -118,9 +117,6 @@ async def get_answer_about_users_data(question_request: QuestionRequest):
         generator = bot.send_message_gemini(prompt, question_request.model)
 
     return StreamingResponse(generator, media_type="text/event-stream")
-
-    # except:
-    #     return {"Error"}
 
 
 @router.post('/get_answer_about_system_data/')

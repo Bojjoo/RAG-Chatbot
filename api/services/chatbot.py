@@ -35,12 +35,12 @@ class ChatBot:
     def prompt_rag(self, question, context, web_search_context, history, prompt_template, prompt_folder):
         llm_prompt = ChatPromptTemplate.from_messages(
             [
-                ("system", "Instruction 1:\n {prompt_folder}\n"),
-                ("system", "Instruction 2:\n {prompt_template}\n"),
-                ("system", "Chat history: \n {chat_history}\n"),
-                ("system", "Context about relevant data: \n{context}\n"),
-                ("system", "Context received from google search:\n{web_search_context}\n"),
-                ("system", "Answer the question: {question}"),
+                ("system", "**Instruction 1:**\n {prompt_folder}\n"),
+                ("system", "**Instruction 2:**\n {prompt_template}\n"),
+                ("system", "**Chat history:**\n {chat_history}\n"),
+                ("system", "**Context about relevant data:**\n{context}\n"),
+                ("system", "**Context received from google search:**\n{web_search_context}\n"),
+                ("system", "**Answer the question:** {question}"),
             ]
         )
         prompt = llm_prompt.format(prompt_folder=prompt_folder, prompt_template=prompt_template,
@@ -51,11 +51,11 @@ class ChatBot:
     def prompt_normalqa(self, question, history, web_search_context, prompt_template, prompt_folder):
         llm_prompt = ChatPromptTemplate.from_messages(
             [
-                ("system", "Instruction 1:\n {prompt_folder}\n"),
-                ("system", "Instruction 2:\n {prompt_template}\n"),
-                ("system", "Chat history: \n {chat_history}\n"),
-                ("system", "Context received from google search:\n{web_search_context}\n"),
-                ("system", "Answer the question: {question}"),
+                ("system", "**Instruction 1:**\n {prompt_folder}\n"),
+                ("system", "**Instruction 2:**\n {prompt_template}\n"),
+                ("system", "**Chat history:** \n {chat_history}\n"),
+                ("system", "**Context received from google search:**\n{web_search_context}\n"),
+                ("system", "**Answer the question:** {question}"),
             ]
         )
         prompt = llm_prompt.format(prompt_folder=prompt_folder, prompt_template=prompt_template,
@@ -67,22 +67,17 @@ class ChatBot:
                                websearchkey: WebSearchKey):
         new_question = False
         # Get history and generate new question
-        history = sql_conn.get_chat_history(question_request.conversation_id)[-8::]
+        history = sql_conn.get_chat_history(question_request.conversation_id)[-6::]
 
         # Nếu web_search là True thì thêm tìm kiếm google search, còn không thì thôi
         if question_request.search_tool == "google_search":
             new_question = await self.reformulate_question(question_request.question, history[::-1])
-            search = GoogleSearchAPIWrapper(google_api_key=websearchkey.google_search_key, google_cse_id=websearchkey.google_search_id)
-            google_search_tool = Tool(
-                name="get_web_search_results",
-                description="Search for information from the internet in real-time using Google Search.",
-                func=search.run,
-            )
-            web_search_context = await google_search_tool.arun(new_question)
+            google_search = GoogleWebSearch(websearchkey.google_search_key, websearchkey.google_search_id)
+            web_search_context = await google_search.search(new_question)
         elif question_request.search_tool == "serper_search":
             new_question = await self.reformulate_question(question_request.question, history[::-1])
-            search = GoogleSerperAPIWrapper(gl="vn", serper_api_key=websearchkey.serper_key)
-            web_search_context = await search.arun(new_question)
+            search = SerperSearch(serper_api_key=websearchkey.serper_key)
+            web_search_context = await search.search(new_question)
         else:
             web_search_context = ""
 
@@ -111,22 +106,16 @@ class ChatBot:
                                       websearchkey: WebSearchKey):
         new_question = False
         # Get history and generate new question
-        history = sql_conn.get_chat_history_system(question_request.conversation_id)[-8::]
+        history = sql_conn.get_chat_history_system(question_request.conversation_id)[-6::]
         # Nếu web_search là True thì thêm tìm kiếm google search, còn không thì thôi
         if question_request.search_tool == "google_search":
             new_question = await self.reformulate_question(question_request.question, history[::-1])
-            search = GoogleSearchAPIWrapper(google_api_key=websearchkey.google_search_key,
-                                            google_cse_id=websearchkey.google_search_id)
-            google_search_tool = Tool(
-                name="get_web_search_results",
-                description="Search for information from the internet in real-time using Google Search.",
-                func=search.run,
-            )
-            web_search_context = await google_search_tool.arun(new_question)
+            google_search = GoogleWebSearch(websearchkey.google_search_key, websearchkey.google_search_id)
+            web_search_context = await google_search.search(new_question)
         elif question_request.search_tool == "serper_search":
             new_question = await self.reformulate_question(question_request.question, history[::-1])
-            search = GoogleSerperAPIWrapper(gl="vn", serper_api_key=websearchkey.serper_key)
-            web_search_context = await search.arun(new_question)
+            search = SerperSearch(serper_api_key=websearchkey.serper_key)
+            web_search_context = await search.search(new_question)
         else:
             web_search_context = ""
 
@@ -196,5 +185,30 @@ class CheckAPIKey:
             self.model = ChatGoogleGenerativeAI(model="gemini-1.5-flash", api_key=apikey)
             self.model.invoke("hello")
 
+
+class GoogleWebSearch:
+    def __init__(self, google_api_key, google_cse_id):
+        self.gg_search = GoogleSearchAPIWrapper(google_api_key=google_api_key, google_cse_id=google_cse_id)
+        self.search_tool = GoogleSearchResults(api_wrapper=self.gg_search, num_results=10)
+
+    async def search(self, question):
+        results = await self.search_tool.arun(question)
+        results = ast.literal_eval(results)
+        context = " ".join(i['snippet'] for i in results)
+        link = [str(i['link']) for i in results[:3]]
+        web_search_context = context + str(link)
+        return web_search_context
+
+
+class SerperSearch:
+    def __init__(self, serper_api_key):
+        self.search_tool = GoogleSerperAPIWrapper(gl="vn", serper_api_key=serper_api_key)
+
+    async def search(self, question):
+        results = await self.search_tool.aresults(question)
+        context = " ".join(i['snippet'] for i in results['organic'])
+        link = [str(i['link']) for i in results['organic'][:3]]
+        web_search_context = context + str(link)
+        return web_search_context
 
 
