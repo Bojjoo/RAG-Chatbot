@@ -629,21 +629,26 @@ if st.session_state["authenticated"]:
                 ] if chat_history else []
                 # Nếu không có lịch sử chat thì hiển thị các prompt template của folder đó
                 if not chat_history:
-                    prompt_template = sql_conn.get_templates_folder(st.session_state["selected_conversation_id"][1])
-                    try:
-                        pt_container = st.container()
-                        with pt_container:
-                            cols = st.columns(len(prompt_template))
-                            for i in range(len(prompt_template)):
-                                with cols[i]:
-                                    if st.button(prompt_template[i][1]):
-                                        st.session_state["question"] = prompt_template[i][1]
-                                        pt_container.empty()
-                                        st.rerun()
-                            pt_container_css = float_css_helper(bottom="400px")
-                            pt_container.float(pt_container_css)
-                    except:
-                        pass
+                    empty_col_1, starter_chat_col, empty_col = st.columns([1.25, 8, 1.25])
+                    with starter_chat_col:
+                        # # Retrieve the prompt templates in their original order
+                        prompt_template = sql_conn.get_templates_folder(st.session_state["selected_conversation_id"][1])
+                        #
+                        # # Total number of prompts
+                        num_prompts = len(prompt_template)
+                        num_rows = num_prompts // 2 if num_prompts % 2 == 0 else num_prompts // 2 + 1
+                        for i in range(num_rows):
+                            cols = st.columns(2, vertical_alignment="center")
+                            for j in range(2):
+                                index = i*2+j
+                                if index < num_prompts:
+                                    with cols[j]:
+                                        if st.button(prompt_template[index][1]):
+                                            st.session_state["question"] = prompt_template[index][1]
+                                            starter_chat_col.empty()
+                                            #st.rerun()
+                    css_helper = float_css_helper(bottom="100px", z_index="90")
+                    starter_chat_col.float(css_helper)
 
             # Check web search key
             if st.session_state["question"] and st.session_state["search_tool"] == "google_search" and not st.session_state["google_api_key"]:
@@ -1179,7 +1184,7 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
             col2.float(css_col2)
 
             with bottom():
-                empty_col_1, input_col, empty_col = st.columns([1.25, 8, 1.25], vertical_alignment="top")
+                empty_col_1, input_col, empty_col_2, empty_col = st.columns([0.25, 7.5, 0.25, 1.5], vertical_alignment="top")
                 with input_col:
                     chat_input_container = st.container()
                     with chat_input_container:
