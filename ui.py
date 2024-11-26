@@ -707,7 +707,7 @@ if st.session_state["authenticated"]:
                 x = len(st.session_state["folders"])
                 num_rows = x // 4 if x % 4 == 0 else x // 4 + 1
                 for i in range(num_rows):
-                    cols = st.columns(4)  # Tạo 3 cột trong mỗi hàng
+                    cols = st.columns(4)  # Tạo 4 cột trong mỗi hàng
                     for j in range(4):
                         index = i * 4 + j
                         if index < x:

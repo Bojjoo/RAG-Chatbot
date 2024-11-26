@@ -73,11 +73,17 @@ class ChatBot:
         if question_request.search_tool == "google_search":
             new_question = await self.reformulate_question(question_request.question, history[::-1])
             google_search = GoogleWebSearch(websearchkey.google_search_key, websearchkey.google_search_id)
-            web_search_context = await google_search.search(new_question)
+            try:
+                web_search_context = await google_search.search(new_question)
+            except:
+                web_search_context = ""
         elif question_request.search_tool == "serper_search":
             new_question = await self.reformulate_question(question_request.question, history[::-1])
             search = SerperSearch(serper_api_key=websearchkey.serper_key)
-            web_search_context = await search.search(new_question)
+            try:
+                web_search_context = await search.search(new_question)
+            except:
+                web_search_context = ""
         else:
             web_search_context = ""
 
@@ -111,11 +117,17 @@ class ChatBot:
         if question_request.search_tool == "google_search":
             new_question = await self.reformulate_question(question_request.question, history[::-1])
             google_search = GoogleWebSearch(websearchkey.google_search_key, websearchkey.google_search_id)
-            web_search_context = await google_search.search(new_question)
+            try:
+                web_search_context = await google_search.search(new_question)
+            except:
+                web_search_context = ""
         elif question_request.search_tool == "serper_search":
             new_question = await self.reformulate_question(question_request.question, history[::-1])
             search = SerperSearch(serper_api_key=websearchkey.serper_key)
-            web_search_context = await search.search(new_question)
+            try:
+                web_search_context = await search.search(new_question)
+            except:
+                web_search_context = ""
         else:
             web_search_context = ""
 
