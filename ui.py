@@ -684,7 +684,7 @@ if st.session_state["authenticated"]:
                         for token in response_stream:
                             output += token
                             assistant_message.markdown(output)
-                            time.sleep(0.01)
+                            #time.sleep(0.01)
                         st.session_state.messages.append({"role": "assistant", "output": output})
 
                     if output.startswith('Error'):
@@ -779,7 +779,7 @@ if st.session_state["authenticated"]:
                         for token in response_stream:
                             output += token
                             assistant_message.markdown(output)
-                            time.sleep(0.01)
+                            #time.sleep(0.01)
                         st.session_state.messages.append({"role": "assistant", "output": output})
 
                     if output.startswith('Error'):
@@ -1239,7 +1239,7 @@ However, it could increase the token usage and take longer time.""", icon="â„¹ï¸
                             for token in response_stream:
                                 output += token
                                 assistant_message.markdown(output)
-                                time.sleep(0.01)
+                                #time.sleep(0.01)
                             st.session_state.messages.append({"role": "assistant", "output": output})
 
                         if output.startswith('Error'):
@@ -1287,7 +1287,7 @@ However, it could increase the token usage and take longer time.""", icon="â„¹ï¸
                             for token in response_stream:
                                 output += token
                                 assistant_message.markdown(output)
-                                time.sleep(0.01)
+                                #time.sleep(0.01)
                             st.session_state.messages.append({"role": "assistant", "output": output})
 
                         if output.startswith('Error'):

@@ -17,7 +17,7 @@ COPY . .
 ENV PYTHONUNBUFFERED=1
 
 # Mở các cổng mà ứng dụng sẽ sử dụng
-EXPOSE 8000 8501
+EXPOSE 9000 9501
 
 # Lệnh để chạy ứng dụng - Chạy FastAPI với Uvicorn
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "9000"]

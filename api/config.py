@@ -51,7 +51,7 @@ CHUNK_OVERLAP = 200
 
 # Postgresql for memory storing
 DATABASE = 'rag_1'
-HOST = 'postgres_db'
+HOST = 'demo_postgres_db_gpt'
 PORT = '5432'
 USER = 'bojjoo'
 PASSWORD = '12345678'
