@@ -789,18 +789,18 @@ if st.session_state["authenticated"]:
                         sql_conn.insert_chat_system(st.session_state["selected_conversation_id"][0], sender[0], st.session_state["question"])
                         sql_conn.insert_chat_system(st.session_state["selected_conversation_id"][0], sender[1], output)
 
-                    # Đổi tên conversation nêu tên vẫn còn là new conversation
-                    conversation_name = sql_conn.get_conversation_name_from_conversationid_system(st.session_state["selected_conversation_id"][0])
-                    if conversation_name == "New conversation":
-                        rename_conversation_endpoint = os.getenv("RENAME_CONVERSATION")
-                        data_for_rename = {
-                            "history": f"(human:{st.session_state['question'][:200]}); (ai: {output[:500]})",
-                            "admin_department": st.session_state["admin_department"]
-                        }
-                        new_name = requests.post(rename_conversation_endpoint, json=data_for_rename)
-                        sql_conn.change_conversation_name_system(st.session_state["selected_conversation_id"][0],
-                                                                 new_name.json().strip('"'))
-                        st.rerun()
+                        # Đổi tên conversation nêu tên vẫn còn là new conversation
+                        conversation_name = sql_conn.get_conversation_name_from_conversationid_system(st.session_state["selected_conversation_id"][0])
+                        if conversation_name == "New conversation":
+                            rename_conversation_endpoint = os.getenv("RENAME_CONVERSATION")
+                            data_for_rename = {
+                                "history": f"(human:{st.session_state['question'][:200]}); (ai: {output[:500]})",
+                                "admin_department": st.session_state["admin_department"]
+                            }
+                            new_name = requests.post(rename_conversation_endpoint, json=data_for_rename)
+                            sql_conn.change_conversation_name_system(st.session_state["selected_conversation_id"][0],
+                                                                     new_name.json().strip('"'))
+                            st.rerun()
 
         # Chat with user's files
         def Chat_With_Files():
@@ -1296,18 +1296,18 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
                             sql_conn.insert_chat(st.session_state["selected_conversation_id"][0], 'human', st.session_state["question"])
                             sql_conn.insert_chat(st.session_state["selected_conversation_id"][0], 'ai', output)
 
-                        # Đổi tên conversation nêu tên vẫn còn là new conversation
-                        conversation_name = sql_conn.get_conversation_name_from_conversationid(st.session_state["selected_conversation_id"][0])
-                        if conversation_name == "New conversation":
-                            rename_conversation_endpoint = os.getenv("RENAME_CONVERSATION")
-                            data_for_rename = {
-                                "history": f"(human:{st.session_state['question'][:200]}); (ai: {output[:500]})",
-                                "admin_department": st.session_state["admin_department"]
-                            }
-                            new_name = requests.post(rename_conversation_endpoint, json=data_for_rename)
-                            sql_conn.change_conversation_name(st.session_state["selected_conversation_id"][0],
-                                                              new_name.json().strip('"'))
-                            st.rerun()
+                            # Đổi tên conversation nêu tên vẫn còn là new conversation
+                            conversation_name = sql_conn.get_conversation_name_from_conversationid(st.session_state["selected_conversation_id"][0])
+                            if conversation_name == "New conversation":
+                                rename_conversation_endpoint = os.getenv("RENAME_CONVERSATION")
+                                data_for_rename = {
+                                    "history": f"(human:{st.session_state['question'][:200]}); (ai: {output[:500]})",
+                                    "admin_department": st.session_state["admin_department"]
+                                }
+                                new_name = requests.post(rename_conversation_endpoint, json=data_for_rename)
+                                sql_conn.change_conversation_name(st.session_state["selected_conversation_id"][0],
+                                                                  new_name.json().strip('"'))
+                                st.rerun()
 
         def Chat_With_CSVFile():
             with st.sidebar:
@@ -1588,7 +1588,8 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
                 description = st.text_area("Description", max_chars=200,
                                            placeholder="E.g., A life coach who can help you set and achieve personal and professional goals.")
                 # Thêm prompt
-                prompt = st.text_area("Project Context & Instructions:", max_chars=10000)
+                prompt = st.text_area("Project Context & Instructions:", max_chars=10000,
+                                      placeholder="""E.g., You are a life coach, you help the user identify and achieve their goals, motivate them, and provide support and encouragement.""")
 
                 # Upload file
                 uploaded_file = st.file_uploader("Choose a file", type=["pdf", "docx"], key="admin_upload_file")

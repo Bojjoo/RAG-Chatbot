@@ -190,7 +190,7 @@ class ChatBot:
 
 class CheckAPIKey:
     def __init__(self, apikey, type):
-        if type == "openaikey" or type == "openai-embedding":
+        if type == "openaikey" or type == "openai_embedding_key":
             self.model = ChatOpenAI(model="gpt-4o-mini", api_key=apikey)
             self.model.invoke("hello")
         elif type == "geminikey":
