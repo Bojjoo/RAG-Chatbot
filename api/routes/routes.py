@@ -74,8 +74,8 @@ async def upload_file(file: UploadFile = File(...), user_id: str = Form(...), fo
     admin_department = sql_conn.get_admin_department(user_id)
     vectorstore = VectorStore(user_id, folder_id,
                               openai_embedding_key=openai_embedding_apikey_cache[f"{admin_department}"])
-    chunks = vectorstore.upload_file(file, user_id, folder_id, semantic_chunking)
-
+    #chunks = vectorstore.upload_file(file, user_id, folder_id, semantic_chunking)
+    chunks = await asyncio.to_thread(vectorstore.upload_file, file, user_id, folder_id, semantic_chunking)
     new_vectorstore = VectorStore(user_id, folder_id,
                                   openai_embedding_key=openai_embedding_apikey_cache[f"{admin_department}"])
     return chunks
@@ -298,7 +298,8 @@ async def upload_file_admin(file: UploadFile = File(...), admin_department: str 
                             semantic_chunking: bool = Form()):
     vectorstore = VectorStoreAdmin(admin_department, folder_id,
                                    openai_embedding_key=openai_embedding_apikey_cache[f"{admin_department}"])
-    chunks = vectorstore.upload_file(file, admin_department, folder_id, semantic_chunking)
+    # chunks = vectorstore.upload_file(file, admin_department, folder_id, semantic_chunking)
+    chunks = await asyncio.to_thread(vectorstore.upload_file, file, admin_department, folder_id, semantic_chunking)
 
     new_vectorstore = VectorStoreAdmin(admin_department, folder_id,
                                        openai_embedding_key=openai_embedding_apikey_cache[f"{admin_department}"])

@@ -5,7 +5,7 @@ MODEL_EMBEDDING = "text-embedding-3-large"
 PROMPT_TEMPLATE = """__Rag__
 I want you to act as a funny and friendly AI chatbot that answers questions based on context retrieved below. Follow the rules below:
 1. If relevant data is available:
-- You limit your knowledge to the context provided. Use the context to provide an informative and accurate answer. 
+- You limit your knowledge to the context provided. Use the context to provide an informative and accurate answer.
 Be concise and direct in your response. You will use emojis. You will be as detailed as possible.
 - Give hyperlinks when needed.
 - When you provide different options in your answer, always structure the answer with different paragraphs
@@ -31,7 +31,7 @@ Make sure to identify clearly what is social greeting input to keep the input re
 Analyze from latest history to further.
 """
 
-RENAME_CONVERSATION_PROMPT = """Give me a name about this conversation based on the chat history. 
+RENAME_CONVERSATION_PROMPT = """Give me a name about this conversation based on the chat history.
 The length of the name should not be longer than 20 characters.\n"""
 
 # Retriever

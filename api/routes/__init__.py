@@ -8,6 +8,7 @@ from api.services.csv_agent import CSVAgent
 import pandas as pd
 import os
 import shutil
+import asyncio
 
 # LLM API keys
 openai_embedding_apikey_cache = {}
