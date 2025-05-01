@@ -9,7 +9,7 @@ flashrank
 openai
 PyPDF2
 requests
-streamlit
+streamlit==1.41.0
 fastapi
 pydantic
 python-dotenv

@@ -516,8 +516,9 @@ if st.session_state["authenticated"]:
                 with model_selection:
                     option = st.selectbox(
                         label="",
-                        options=("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo",
-                                 "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro", "gemini-1.5-flash-002",
+                        options=("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "gemini-2.0-flash",
+                                 "gemini-2.0-flash-thinking-exp-01-21", "gemini-2.0-flash-exp",
+                                 "gemini-1.5-flash", "gemini-1.5-pro",  "gemini-1.5-flash-002",
                                  "gemini-1.5-pro-002", "gemini-1.5-flash-8b"),
                         index=None,
                         placeholder="gpt-4o-mini",
@@ -735,16 +736,12 @@ if st.session_state["authenticated"]:
                                                                                 st.session_state["user_id"],
                                                                                 st.session_state["folders"][index][0])
                                             # # Lấy danh sách các phiên hội thoại
-                                            st.session_state[
-                                                f"conversations_system_{folder[0]}"] = sql_conn.get_conversation_session_system(
-                                                st.session_state["user_id"], folder[0])
+                                            st.session_state[f"conversations_system_{folder[0]}"] = sql_conn.get_conversation_session_system(st.session_state["user_id"],
+                                                                                                                                             folder[0])
                                             st.session_state["selected_conversation_id"] = (conversation_id,
-                                                                                            st.session_state["folders"][
-                                                                                                index][0],
-                                                                                            st.session_state["folders"][
-                                                                                                index][1],
-                                                                                            st.session_state["folders"][
-                                                                                                index][4])
+                                                                                            st.session_state["folders"][index][0],
+                                                                                            st.session_state["folders"][index][1],
+                                                                                            st.session_state["folders"][index][4])
                                             st.rerun()
                                     with detail_col:
                                         st.markdown(f'<div style="text-align:left;"><strong>{st.session_state["folders"][index][1]}</strong></div>',
@@ -1081,7 +1078,7 @@ However, it could increase the token usage and take longer time.""", icon="ℹ�
                 with model_selection:
                     option = st.selectbox(
                         label="",
-                        options=("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo",
+                        options=("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "gemini-2.0-flash-exp",
                                  "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro", "gemini-1.5-flash-002",
                                  "gemini-1.5-pro-002", "gemini-1.5-flash-8b"),
                         index=None,

@@ -102,8 +102,8 @@ CREATE TABLE messages_system(
     Primary key(message_id,conversation_id)
 );
 
-insert into admins(admin_department, admin_username, admin_password) VALUES('DG1','AdminDG1','thisaccountisjustforadmindg1');
-insert into admins(admin_department, admin_username, admin_password) VALUES('DN1','AdminDN1','thisaccountisjustforadmindn1');
+insert into admins(admin_department, admin_username, admin_password) VALUES('DG1','Admin1','thisaccountisjustforadmin1');
+insert into admins(admin_department, admin_username, admin_password) VALUES('DN1','Admin2','thisaccountisjustforadmin2');
 
 
 -- Tạo function để tự động tính `message_id` cho mỗi `conversation_id` của user.
